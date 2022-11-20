@@ -21,7 +21,7 @@ def run():
 
     username = os.environ.get('USERNAME')
     password = os.environ.get('PASSWORD')
-    count = os.environ.get('COUNT')
+    count = int(os.environ.get('COUNT'))
     mode = "AUTO"
 
     authCtrl = login(username, password)
