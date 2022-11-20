@@ -5,11 +5,9 @@ import requests
 from bs4 import BeautifulSoup as BS
 import auth
 
-
 class Lotto645Mode(Enum):
     AUTO = 1
     MANUAL = 2
-
 
 class Lotto645:
     _REQ_HEADERS = {
@@ -31,7 +29,10 @@ class Lotto645:
     }
 
     def buy_lotto645(
-        self, auth_ctrl: auth.AuthController, cnt: int, mode: Lotto645Mode
+        self, 
+        auth_ctrl: auth.AuthController, 
+        cnt: int, 
+        mode: Lotto645Mode
     ) -> None:
         assert type(auth_ctrl) == auth.AuthController
         assert type(cnt) == int and 1 <= cnt <= 5
@@ -63,7 +64,7 @@ class Lotto645:
             "C",
             "D",
             "E",
-        ]  # TODO: provide (not required) option for slot selection
+        ]  
 
         return {
             "round": self._get_round(),
@@ -76,8 +77,6 @@ class Lotto645:
                 ]
             ),
             "gameCnt": cnt
-            # "ROUND_DRAW_DATE": "2021/06/01", # success after commented
-            # "WAMT_PAY_TLMT_END_DT": "2022/06/01", # success after commented
         }
 
     def _generate_body_for_manual(self, cnt: int) -> dict:
@@ -109,36 +108,11 @@ class Lotto645:
     def _show_result(self, body: dict) -> None:
         assert type(body) == dict
 
+        print(f"{json.dumps(body)}")
+
         if body.get("loginYn") != "Y":
-            print("Fail to purchase (reason: not logged in)")
-            print("[DEBUG] body: ", body)
             return
 
         result = body.get("result", {})
-        if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":
-            print(
-                f'Fail to purchase (reason: {result.get("resultMsg", f"Unknown (resultMsg field is empty. full response: {body})")})'
-            )
-            print("[DEBUG] body: ", body)
+        if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":    
             return
-
-        print(
-            f"""Success to purchase
-\t------------------
-\tRound: {result["buyRound"]}
-\tBarcode: {result["barCode1"]} {result["barCode2"]} {result["barCode3"]} {result["barCode4"]} {result["barCode5"]} {result["barCode6"]}
-\tCost : {result["nBuyAmount"]}
-\tNumbers: \n{self._format_lotto_numbers(result["arrGameChoiceNum"])}
-\tResult Message: {result["resultMsg"]}
-\t------------------"""
-        )
-        print("[DEBUG] body: ", body)
-
-    def _format_lotto_numbers(self, numbers: list) -> None:
-        assert type(numbers) == list
-
-        tabbed_numbers = [
-            "\t\t" + number for number in numbers
-        ]  # TODO: what is trailing '3' in each number?
-        linebroken_tabbed_numbers = "\n".join(tabbed_numbers)
-        return linebroken_tabbed_numbers
