@@ -13,3 +13,6 @@
 - Settings - Secrets - Add a new secret 메뉴로 들어갑니다
 - 환경 변수들을 만들어 줍니다 (.env.sample 참조) 
 - 매주 로또 구매 및 당첨 과정을 자동으로 알려드려요 🎉
+
+# Reference 
+- https://github.com/roeniss/dhlottery-api
