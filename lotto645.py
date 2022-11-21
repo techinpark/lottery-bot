@@ -1,13 +1,18 @@
 import json
-from enum import Enum
-
+import datetime
 import requests
+
+from enum import Enum
 from bs4 import BeautifulSoup as BS
+from datetime import timedelta
+
 import auth
 
 class Lotto645Mode(Enum):
     AUTO = 1
     MANUAL = 2
+    BUY = 10 
+    CHECK = 20
 
 class Lotto645:
     _REQ_HEADERS = {
@@ -33,7 +38,7 @@ class Lotto645:
         auth_ctrl: auth.AuthController, 
         cnt: int, 
         mode: Lotto645Mode
-    ) -> None:
+    ) -> dict:
         assert type(auth_ctrl) == auth.AuthController
         assert type(cnt) == int and 1 <= cnt <= 5
         assert type(mode) == Lotto645Mode
@@ -49,6 +54,7 @@ class Lotto645:
         body = self._try_buying(headers, data)
 
         self._show_result(body)
+        return body
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController
@@ -104,6 +110,60 @@ class Lotto645:
         )
         res.encoding = "utf-8"
         return json.loads(res.text)
+
+    def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
+        assert type(auth_ctrl) == auth.AuthController
+
+        headers = self._generate_req_headers(auth_ctrl)
+
+        parameters = self._make_search_date()
+
+        data = {
+            "nowPage": 1, 
+            "searchStartDate": parameters["searchStartDate"],
+            "searchEndDate": parameters["searchEndDate"],
+            "winGrade": 1,
+            "lottoId": "LO40", 
+            "sortOrder": "DESC"
+        }
+
+        res = requests.post(
+            "https://dhlottery.co.kr/myPage.do?method=lottoBuyList",
+            headers=headers,
+            data=data
+        )
+
+        html = res.text
+        soup = BS(html, "html5lib")
+        
+        winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")        
+
+        result_data = {
+            "data": "no winning data"
+        }
+        
+        if len(winnings) == 1:
+            return result_data
+            
+
+        result_data = {
+            "round": winnings[2].text.strip(),
+            "money": winnings[6].text.strip(),
+            "purchased_date": winnings[0].text.strip(),
+            "winning_date": winnings[7].text.strip()
+        }
+
+        return result_data
+    
+    def _make_search_date(self) -> dict:
+        today = datetime.datetime.today()
+        today_str = today.strftime("%Y%m%d")
+        weekago = today - timedelta(days=7)
+        weekago_str = weekago.strftime("%Y%m%d")
+        return {
+            "searchStartDate": weekago_str,
+            "searchEndDate": today_str
+        }
 
     def _show_result(self, body: dict) -> None:
         assert type(body) == dict
