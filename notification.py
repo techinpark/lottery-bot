@@ -10,7 +10,7 @@ class Notification:
         if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":  
             return
 
-        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag:\n\n ```{result['arrGameChoiceNum']}```"
+        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag:\n```{result['arrGameChoiceNum']}```"
         self._send_slack_webhook(webhook_url, message)
 
     def send_winning_message(self, winning: dict, webhook_url: str) -> None: 
