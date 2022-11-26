@@ -17,8 +17,13 @@ class Notification:
         assert type(winning) == dict
         assert type(webhook_url) == str
 
-        message = f"*{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
-        self._send_slack_webhook(webhook_url, message)
+        try: 
+            round = winning["round"]
+            money = winning["money"]
+            message = f"*{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
+            self._send_slack_webhook(webhook_url, message)
+        except KeyError:
+            return
 
     def _send_slack_webhook(self, webhook_url: str, message: str) -> None:        
         payload = { "text": message }
