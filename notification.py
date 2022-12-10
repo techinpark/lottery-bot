@@ -11,7 +11,7 @@ class Notification:
             return
 
         lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
-        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag:\n```{lotto_number_str}```"
+        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
         self._send_slack_webhook(webhook_url, message)
 
     def make_lotto_number_message(self, lotto_number: list) -> str:

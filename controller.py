@@ -16,6 +16,7 @@ def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
     lotto = lotto645.Lotto645()
     _mode = lotto645.Lotto645Mode[mode.upper()]
     response = lotto.buy_lotto645(authCtrl, cnt, _mode)
+    response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
     return response
 
 def check_winning_lotto645(authCtrl: auth.AuthController) -> dict:
@@ -53,8 +54,8 @@ def buy():
     mode = "AUTO"
 
     authCtrl = login(username, password)
-    response = buy_lotto645(authCtrl, count, mode)
-    send_message(lotto645.Lotto645Mode.BUY, response, slack_webhook_url)
+    response = buy_lotto645(authCtrl, count, mode) 
+    send_message(mode=lotto645.Lotto645Mode.BUY, response=response, webhook_url=slack_webhook_url)
 
 def run():
     if len(sys.argv) < 2:

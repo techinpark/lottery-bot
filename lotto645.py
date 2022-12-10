@@ -99,6 +99,22 @@ class Lotto645:
         last_drawn_round = int(soup.find("strong", id="lottoDrwNo").text)
         return str(last_drawn_round + 1)
 
+    def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
+        
+        headers = self._generate_req_headers(auth_ctrl)
+        res = requests.post( 
+            url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
+            headers=headers
+        )
+
+        html = res.text
+        soup = BS(
+            html, "html5lib"
+        )
+        balance = soup.find("p", class_="total_new").find('strong').text
+        return balance
+        
+
     def _try_buying(self, headers: dict, data: dict) -> dict:
         assert type(headers) == dict
         assert type(data) == dict
