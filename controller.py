@@ -38,10 +38,11 @@ def check():
     username = os.environ.get('USERNAME')
     password = os.environ.get('PASSWORD')
     slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
 
     authCtrl = login(username, password)
     response = check_winning_lotto645(authCtrl)
-    send_message(lotto645.Lotto645Mode.CHECK, response, slack_webhook_url)
+    send_message(lotto645.Lotto645Mode.CHECK, response, discord_webhook_url)
 
 def buy(): 
     
@@ -51,11 +52,12 @@ def buy():
     password = os.environ.get('PASSWORD')
     count = int(os.environ.get('COUNT'))
     slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
     mode = "AUTO"
 
     authCtrl = login(username, password)
     response = buy_lotto645(authCtrl, count, mode) 
-    send_message(mode=lotto645.Lotto645Mode.BUY, response=response, webhook_url=slack_webhook_url)
+    send_message(mode=lotto645.Lotto645Mode.BUY, response=response, webhook_url=discord_webhook_url)
 
 def run():
     if len(sys.argv) < 2:
