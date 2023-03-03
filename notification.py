@@ -3,7 +3,7 @@ import requests
                     
 class Notification: 
 
-    def send_buying_message(self, body: dict, webhook_url: str) -> None:
+    def send_lotto_buying_message(self, body: dict, webhook_url: str) -> None:
         assert type(webhook_url) == str
 
         result = body.get("result", {})
@@ -28,14 +28,40 @@ class Notification:
         
         return lotto_number
 
-    def send_winning_message(self, winning: dict, webhook_url: str) -> None: 
+    def send_win720_buying_message(self, body: dict, webhook_url: str) -> None:
+        assert type(webhook_url) == str
+        
+        if body.get("resultCode") != '100':  
+            return       
+
+        win720_round = body.get("resultMsg").split("|")[3]
+
+        win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
+        message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{win720_number_str}```"
+
+    def make_win720_number_message(self, win720_number: str) -> str:
+        return "\n".join(win720_number.split(","))
+
+    def send_lotto_winning_message(self, winning: dict, webhook_url: str) -> None: 
         assert type(winning) == dict
         assert type(webhook_url) == str
 
         try: 
             round = winning["round"]
             money = winning["money"]
-            message = f"*{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
+            message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
+            self._send_discord_webhook(webhook_url, message)
+        except KeyError:
+            return
+
+    def send_win720_winning_message(self, winning: dict, webhook_url: str) -> None: 
+        assert type(winning) == dict
+        assert type(webhook_url) == str
+
+        try: 
+            round = winning["round"]
+            money = winning["money"]
+            message = f"연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
             self._send_discord_webhook(webhook_url, message)
         except KeyError:
             return
