@@ -44,9 +44,10 @@ class Lotto645:
         assert type(mode) == Lotto645Mode
 
         headers = self._generate_req_headers(auth_ctrl)
+        requirements = self._getRequirements(headers)
 
         data = (
-            self._generate_body_for_auto_mode(cnt)
+            self._generate_body_for_auto_mode(cnt, requirements)
             if mode == Lotto645Mode.AUTO
             else self._generate_body_for_manual(cnt)
         )
@@ -61,7 +62,7 @@ class Lotto645:
 
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
 
-    def _generate_body_for_auto_mode(self, cnt: int) -> dict:
+    def _generate_body_for_auto_mode(self, cnt: int, requirements: list) -> dict:
         assert type(cnt) == int and 1 <= cnt <= 5
 
         SLOTS = [
@@ -74,7 +75,7 @@ class Lotto645:
 
         return {
             "round": self._get_round(),
-            "direct": "172.17.20.52",  # TODO: test if this can be comment
+            "direct": requirements[0],  # TODO: test if this can be comment
             "nBuyAmount": str(1000 * cnt),
             "param": json.dumps(
                 [
@@ -82,6 +83,8 @@ class Lotto645:
                     for slot in SLOTS[:cnt]
                 ]
             ),
+            'ROUND_DRAW_DATE' : requirements[1],
+            'WAMT_PAY_TLMT_END_DT' : requirements[2],
             "gameCnt": cnt
         }
 
@@ -89,6 +92,35 @@ class Lotto645:
         assert type(cnt) == int and 1 <= cnt <= 5
 
         raise NotImplementedError()
+
+    def _getRequirements(self, headers: dict) -> list: 
+        org_headers = headers
+
+        headers["Referer"] ="https://ol.dhlottery.co.kr/olotto/game/game645.do"
+        headers["Content-Type"] = "application/json; charset=UTF-8"
+        headers["X-Requested-With"] ="XMLHttpRequest"
+
+		#no param needed at now
+        res = requests.post( 
+            url="https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
+            headers=headers
+        )
+        
+        direct = json.loads(res.text)["ready_ip"]
+        
+
+        res = requests.post( 
+            url="https://ol.dhlottery.co.kr/olotto/game/game645.do", 
+            headers=org_headers
+        )
+        html = res.text
+        soup = BS(
+            html, "html5lib"
+        )
+        draw_date = soup.find("input", id="ROUND_DRAW_DATE").get('value')
+        tlmt_date = soup.find("input", id="WAMT_PAY_TLMT_END_DT").get('value')
+
+        return [direct, draw_date, tlmt_date]
 
     def _get_round(self) -> str:
         res = requests.get("https://www.dhlottery.co.kr/common.do?method=main")
@@ -100,7 +132,7 @@ class Lotto645:
         return str(last_drawn_round + 1)
 
     def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
-        
+
         headers = self._generate_req_headers(auth_ctrl)
         res = requests.post( 
             url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
@@ -114,10 +146,11 @@ class Lotto645:
         balance = soup.find("p", class_="total_new").find('strong').text
         return balance
         
-
     def _try_buying(self, headers: dict, data: dict) -> dict:
         assert type(headers) == dict
         assert type(data) == dict
+
+        headers["Content-Type"]  = "application/x-www-form-urlencoded; charset=UTF-8"
 
         res = requests.post(
             "https://ol.dhlottery.co.kr/olotto/game/execBuy.do",
@@ -183,8 +216,6 @@ class Lotto645:
 
     def _show_result(self, body: dict) -> None:
         assert type(body) == dict
-
-        print(f"{json.dumps(body)}")
 
         if body.get("loginYn") != "Y":
             return
