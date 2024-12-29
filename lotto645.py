@@ -94,7 +94,7 @@ class Lotto645:
         raise NotImplementedError()
 
     def _getRequirements(self, headers: dict) -> list: 
-        org_headers = headers
+        org_headers = headers.copy()
 
         headers["Referer"] ="https://ol.dhlottery.co.kr/olotto/game/game645.do"
         headers["Content-Type"] = "application/json; charset=UTF-8"

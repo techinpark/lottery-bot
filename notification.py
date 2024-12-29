@@ -37,7 +37,7 @@ class Notification:
         win720_round = body.get("resultMsg").split("|")[3]
 
         win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
-        message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{win720_number_str}```"
+        message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```\n{win720_number_str}```"
 
     def make_win720_number_message(self, win720_number: str) -> str:
         return "\n".join(win720_number.split(","))
