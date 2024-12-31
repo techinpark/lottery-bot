@@ -1,6 +1,6 @@
 import copy
 import requests
-
+from HttpClient import HttpClientSingleton
 
 class AuthController:
     _REQ_HEADERS = {
@@ -22,6 +22,10 @@ class AuthController:
     }
 
     _AUTH_CRED = ""
+
+
+    def __init__(self):
+        self.http_client = HttpClientSingleton.get_instance()
 
     def login(self, user_id: str, password: str):
         assert type(user_id) == str
@@ -47,7 +51,7 @@ class AuthController:
         return copied_headers
 
     def _get_default_auth_cred(self):
-        res = requests.get(
+        res = self.http_client.get(
             "https://dhlottery.co.kr/gameResult.do?method=byWin&wiselog=H_C_1_1"
         )
 
@@ -85,7 +89,7 @@ class AuthController:
         assert type(headers) == dict
         assert type(data) == dict
 
-        res = requests.post(
+        res = self.http_client.post(
             "https://www.dhlottery.co.kr/userSsl.do?method=login",
             headers=headers,
             data=data,

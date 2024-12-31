@@ -1,8 +1,6 @@
 import requests
 
-                    
-class Notification: 
-
+class Notification:
     def send_lotto_buying_message(self, body: dict, webhook_url: str) -> None:
         assert type(webhook_url) == str
 
@@ -29,7 +27,6 @@ class Notification:
         return lotto_number
 
     def send_win720_buying_message(self, body: dict, webhook_url: str) -> None:
-        assert type(webhook_url) == str
         
         if body.get("resultCode") != '100':  
             return       
@@ -38,6 +35,7 @@ class Notification:
 
         win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
         message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```\n{win720_number_str}```"
+        self._send_discord_webhook(webhook_url, message)
 
     def make_win720_number_message(self, win720_number: str) -> str:
         return "\n".join(win720_number.split(","))
