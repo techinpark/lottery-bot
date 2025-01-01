@@ -6,6 +6,7 @@ import auth
 import lotto645
 import win720
 import notification
+import time
 
 
 def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
@@ -55,9 +56,12 @@ def check():
 
     globalAuthCtrl = auth.AuthController()
     globalAuthCtrl.login(username, password)
+    
     response = check_winning_lotto645(globalAuthCtrl)
     send_message(0, 0, response=response, webhook_url=discord_webhook_url)
 
+    time.sleep(10)
+    
     response = check_winning_win720(globalAuthCtrl)
     send_message(0, 1, response=response, webhook_url=discord_webhook_url)
 
@@ -78,7 +82,9 @@ def buy():
     response = buy_lotto645(globalAuthCtrl, count, mode) 
     send_message(1, 0, response=response, webhook_url=discord_webhook_url)
 
-    response = buy_win720(globalAuthCtrl, username) 
+    time.sleep(10)
+    
+    response = buy_win720(globalAuthCtrl, username)
     send_message(1, 1, response=response, webhook_url=discord_webhook_url)
 
 def run():
