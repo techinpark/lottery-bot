@@ -10,7 +10,7 @@ class Notification:
 
         lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
         message = f"{result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
-        self._send_discord_webhook(webhook_url, message)
+        self._send_to_webhook(webhook_url, message)
 
     def make_lotto_number_message(self, lotto_number: list) -> str:
         assert type(lotto_number) == list
@@ -35,7 +35,7 @@ class Notification:
 
         win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
         message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```\n{win720_number_str}```"
-        self._send_discord_webhook(webhook_url, message)
+        self._send_to_webhook(webhook_url, message)
 
     def make_win720_number_message(self, win720_number: str) -> str:
         return "\n".join(win720_number.split(","))
@@ -48,7 +48,7 @@ class Notification:
             round = winning["round"]
             money = winning["money"]
             message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
-            self._send_discord_webhook(webhook_url, message)
+            self._send_to_webhook(webhook_url, message)
         except KeyError:
             return
 
@@ -60,10 +60,10 @@ class Notification:
             round = winning["round"]
             money = winning["money"]
             message = f"연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
-            self._send_discord_webhook(webhook_url, message)
+            self._send_to_webhook(webhook_url, message)
         except KeyError:
             return
 
-    def _send_discord_webhook(self, webhook_url: str, message: str) -> None:        
-        payload = { "content": message }
+    def _send_to_webhook(self, webhook_url: str, message: str) -> None:        
+        payload = { "content": message, "text": message } # content for discord, text for slack
         requests.post(webhook_url, json=payload)
