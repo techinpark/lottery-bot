@@ -1,6 +1,5 @@
 import datetime
 import json
-import re
 
 from datetime import timedelta
 from enum import Enum
