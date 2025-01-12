@@ -1,4 +1,5 @@
 import requests
+import re
 
 class Notification:
     def send_lotto_buying_message(self, body: dict, webhook_url: str) -> None:
@@ -47,8 +48,39 @@ class Notification:
         try: 
             round = winning["round"]
             money = winning["money"]
-            message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
-            self._send_discord_webhook(webhook_url, message)
+
+            max_label_status_length = max(len(f"{line['label']} {line['status']}") for line in winning["lotto_details"])
+
+            formatted_lines = []
+            for line in winning["lotto_details"]:
+                line_label_status = f"{line['label']} {line['status']}".ljust(max_label_status_length)
+                line_result = line["result"]
+
+                formatted_nums = []
+                for num in line_result:
+                    raw_num = re.search(r'\d+', num).group()
+                    formatted_num = f"{int(raw_num):02d}"
+                    if '✨' in num:
+                        formatted_nums.append(f"[{formatted_num}]")
+                    else:
+                        formatted_nums.append(f" {formatted_num} ")
+
+                formatted_nums = [f"{num:>6}" for num in formatted_nums]
+
+                formatted_line = f"{line_label_status} " + " ".join(formatted_nums)
+                formatted_lines.append(formatted_line)
+
+            formatted_results = "\n".join(formatted_lines)
+
+            if winning['money'] != "-":
+                winning_message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉"
+            else:
+                winning_message = f"로또 *{winning['round']}회* - 다음 기회에... 🫠"
+
+            if "discord" in webhook_url:
+                self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
+            else:
+                self._send_discord_webhook(webhook_url, f"{winning_message}")
         except KeyError:
             return
 
