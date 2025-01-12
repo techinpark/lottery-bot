@@ -39,7 +39,11 @@ class Notification:
         self._send_discord_webhook(webhook_url, message)
 
     def make_win720_number_message(self, win720_number: str) -> str:
-        return "\n".join(win720_number.split(","))
+        formatted_numbers = []
+        for number in win720_number.split(","):
+            formatted_number = f"{number[0]}조 " + " ".join(number[1:])
+            formatted_numbers.append(formatted_number)
+        return "\n".join(formatted_numbers)
 
     def send_lotto_winning_message(self, winning: dict, webhook_url: str) -> None: 
         assert type(winning) == dict
@@ -77,10 +81,7 @@ class Notification:
             else:
                 winning_message = f"로또 *{winning['round']}회* - 다음 기회에... 🫠"
 
-            if "discord" in webhook_url:
-                self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
-            else:
-                self._send_discord_webhook(webhook_url, f"{winning_message}")
+            self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
         except KeyError:
             return
 
