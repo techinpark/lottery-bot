@@ -1,5 +1,6 @@
 import datetime
 import json
+
 from datetime import timedelta
 from enum import Enum
 
@@ -176,7 +177,7 @@ class Lotto645:
             "nowPage": 1, 
             "searchStartDate": parameters["searchStartDate"],
             "searchEndDate": parameters["searchEndDate"],
-            "winGrade": 1,
+            "winGrade": 2,
             "lottoId": "LO40", 
             "sortOrder": "DESC"
         }
@@ -197,6 +198,38 @@ class Lotto645:
 
             winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")
 
+            get_detail_info = winnings[3].find("a").get("href")
+
+            order_no, barcode, issue_no = get_detail_info.split("'")[1::2]
+            url = f"https://dhlottery.co.kr/myPage.do?method=lotto645Detail&orderNo={order_no}&barcode={barcode}&issueNo={issue_no}"
+
+            response = self.http_client.get(url)
+
+            soup = BS(response.text, "html5lib")
+
+            lotto_results = []
+
+            for li in soup.select("div.selected li"):
+                label = li.find("strong").find_all("span")[0].text.strip()
+                status = li.find("strong").find_all("span")[1].text.strip().replace("낙첨","0등")
+                nums = li.select("div.nums > span")
+
+                status = " ".join(status.split())
+
+                formatted_nums = []
+                for num in nums:
+                    ball = num.find("span", class_="ball_645")
+                    if ball:
+                        formatted_nums.append(f"✨{ball.text.strip()}")
+                    else:
+                        formatted_nums.append(num.text.strip())
+
+                lotto_results.append({
+                    "label": label,
+                    "status": status,
+                    "result": formatted_nums
+                })
+
             if len(winnings) == 1:
                 return result_data
 
@@ -204,7 +237,8 @@ class Lotto645:
                 "round": winnings[2].text.strip(),
                 "money": winnings[6].text.strip(),
                 "purchased_date": winnings[0].text.strip(),
-                "winning_date": winnings[7].text.strip()
+                "winning_date": winnings[7].text.strip(),
+                "lotto_details": lotto_results
             }
         except:
             pass
