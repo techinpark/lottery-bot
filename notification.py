@@ -92,9 +92,14 @@ class Notification:
         try: 
             round = winning["round"]
             money = winning["money"]
-            message = f"연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 :tada:"
+
+            if winning['money'] != "-":
+                message = f"연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉"
+
             self._send_discord_webhook(webhook_url, message)
         except KeyError:
+            message = f"연금복권 - 다음 기회에... 🫠"
+            self._send_discord_webhook(webhook_url, message)
             return
 
     def _send_discord_webhook(self, webhook_url: str, message: str) -> None:        

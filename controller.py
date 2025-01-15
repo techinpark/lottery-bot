@@ -83,8 +83,8 @@ def buy():
     send_message(1, 0, response=response, webhook_url=discord_webhook_url)
 
     time.sleep(10)
-    
-    response = buy_win720(globalAuthCtrl, username)
+
+    response = buy_win720(globalAuthCtrl, username) 
     send_message(1, 1, response=response, webhook_url=discord_webhook_url)
 
 def run():
