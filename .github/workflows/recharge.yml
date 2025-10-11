@@ -1,0 +1,31 @@
+name: Recharge
+on:
+  schedule:
+    - cron: 0 1 * * 1 # every Monday on 10:00 AM (KST)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [ubuntu-latest]
+    name: Recharge
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+          cache: "pip" # caching pip dependencies
+      - run: pip install -r requirements.txt
+
+      - name: Run Scripts
+        run: make recharge
+        env:
+          USERNAME: ${{ secrets.USERNAME }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          AMOUNT: 10000
+          WAIT_TIMEOUT_SECONDS: 10
+          HEADLESS: True
+          ACCOUNT_PASSWORD: ${{ secrets.ACCOUNT_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: mistralai/mistral-small-3.2-24b-instruct:free
+          OPENROUTER_TIMEOUT: 15

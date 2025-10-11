@@ -1,6 +1,18 @@
 import requests
 
 class Notification:
+    def send_recharge_message(self, body: dict, webhook_url: str) -> None:
+        assert type(body) == dict
+        assert type(webhook_url) == str
+
+        status = body["status"]
+        if status == "error":
+            message = f"예치금 충전 실패 :x: 에러 : {body['error']}"
+        else:
+            amount = body["amount"]
+            message = f"예치금 충전 완료 :moneybag: 충전 금액 : {amount}원"
+        self._send_to_webhook(webhook_url, message)
+
     def send_lotto_buying_message(self, body: dict, webhook_url: str) -> None:
         assert type(webhook_url) == str
 

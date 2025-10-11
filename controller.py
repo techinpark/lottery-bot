@@ -6,6 +6,7 @@ import auth
 import lotto645
 import win720
 import notification
+from recharge import Recharge
 import time
 
 
@@ -72,7 +73,6 @@ def check():
         send_message(0, 1, response=response, webhook_url=discord_webhook_url)
 
 def buy(): 
-    
     load_dotenv() 
 
     username = os.environ.get('USERNAME')
@@ -99,6 +99,27 @@ def buy():
     if discord_webhook_url != '':
         send_message(1, 1, response=response, webhook_url=discord_webhook_url)
 
+def recharge():
+    load_dotenv()
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    amount = int(os.environ.get('AMOUNT', '0'))
+
+    globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.login(username, password)
+    headers_with_cookie = globalAuthCtrl.add_auth_cred_to_headers({})
+    cookie_header = headers_with_cookie.get("Cookie", "")
+    jsession_id = ""
+    if "JSESSIONID=" in cookie_header:
+        jsession_id = cookie_header.split("JSESSIONID=", 1)[1].strip()
+
+    r = Recharge()
+    response = r.recharge(jsession_id, amount)
+    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
+    if slack_webhook_url != '':
+        notify = notification.Notification()
+        notify.send_recharge_message(response, slack_webhook_url)
+
 def run():
     if len(sys.argv) < 2:
         print("Usage: python controller.py [buy|check]")
@@ -108,7 +129,8 @@ def run():
         buy()
     elif sys.argv[1] == "check":
         check()
-  
+    elif sys.argv[1] == "recharge":
+        recharge()
 
 if __name__ == "__main__":
     run()

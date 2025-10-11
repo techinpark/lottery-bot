@@ -6,3 +6,6 @@ buy:
 
 check:
 	python3 controller.py check
+
+recharge:
+	python3 controller.py recharge
