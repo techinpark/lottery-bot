@@ -15,6 +15,7 @@ from selenium.common.exceptions import TimeoutException
 
 import requests
 import json
+import random
 
 class Recharge:
     def __init__(self, *, wait_timeout_seconds: Optional[int] = None, headless: Optional[bool] = None):
@@ -141,116 +142,144 @@ class Recharge:
         """
         print(f"[Recharge] Inferring keypad layout via OpenRouter: {layout_img_src}")
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-        model = os.environ.get("OPENROUTER_MODEL", "").strip()
-        if not api_key or not model:
-            print("[Recharge] OPENROUTER_API_KEY or OPENROUTER_MODEL not set; skipping keypad layout inference")
+        # 하드코딩된 모델 목록 (필요 시 이 배열만 수정하세요)
+        models: List[str] = [
+            "google/gemini-2.0-flash-exp:free",
+            "mistralai/mistral-small-3.2-24b-instruct:free",
+            "google/gemma-3-4b-it:free",
+        ]
+
+        if not api_key:
+            print("[Recharge] OPENROUTER_API_KEY not set; skipping keypad layout inference")
             return None
-        
+
         timeout_seconds = int(os.environ.get("OPENROUTER_TIMEOUT", "15") or 15)
-        try:
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps({
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "왼쪽 3x4 이미지만 보고 이미지의 키패드를 보고 숫자 배열로 변환해줘. 0~9까지 모든 하나씩 반드시 있어야해. 가장 아래 숫자도 포함해야해."},
-                                {"type": "image_url", "image_url": {"url": layout_img_src}},
-                            ],
-                        }
-                    ],
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "keypad",
-                            "strict": True,
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "keypad_layout": {
-                                        "type": "array",
-                                        "description": "A layout of a keypad with a length of 10 with one number from 0 to 9.",
-                                        "items": {"type": "number", "description": "keypad number"},
-                                    }
-                                },
-                                "required": ["keypad_layout"],
-                                "additionalProperties": False,
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        # 모델 목록을 무작위로 섞은 뒤 순차 시도
+        models_to_try = list(models)
+        random.shuffle(models_to_try)
+
+        for model_name in models_to_try:
+            print(f"[Recharge] Trying OpenRouter model: {model_name}")
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "You are an expert at image-based data extraction. \
+Analyze the given image, which contains a blue keypad with numbers and buttons labeled in Korean. \
+The image always shows two identical keypads side by side, each containing digits (0-9) randomly placed in a 3x4 grid. \
+The bottom row includes Korean text “전체삭제” (which means \"clear all\") and a backspace icon — ignore these elements completely. \
+Your task: \
+1. Focus only on the left keypad. \
+2. Identify and extract only the 10 digits (0-9) visible inside the left keypad area. \
+3. Read the digits in the left keypad in row-major order (left to right, top to bottom). \
+4. Return the result as a numeric array containing exactly 10 numbers. \
+Example output: [6, 7, 8, 3, 9, 5, 4, 1, 0, 2]. \
+Output only the numeric array, nothing else — no explanations or text."},
+                            {"type": "image_url", "image_url": {"url": layout_img_src}},
+                        ],
+                    }
+                ],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "keypad",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "keypad_layout": {
+                                    "type": "array",
+                                    "description": "A layout of a keypad with a length of 10 with one number from 0 to 9.",
+                                    "items": {"type": "number", "description": "keypad number"},
+                                }
                             },
+                            "required": ["keypad_layout"],
+                            "additionalProperties": False,
                         },
                     },
-                }),
-                timeout=timeout_seconds,
-            )
-        except Exception as e:
-            print(f"[Recharge] OpenRouter request failed: {e}")
-            return None
+                },
+            }
 
-        if not getattr(response, "status_code", 0) or response.status_code >= 400:
-            print(f"[Recharge] OpenRouter HTTP error: {getattr(response, 'status_code', '?')}")
-            return None
+            try:
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    data=json.dumps(payload),
+                    timeout=timeout_seconds,
+                )
+            except Exception as e:
+                print(f"[Recharge] OpenRouter request failed (model={model_name}): {e}")
+                continue
 
-        try:
-            json_data = response.json()
-            print("[Recharge] OpenRouter response (formatted):")
-            print(json.dumps(json_data, ensure_ascii=False, indent=2))
+            if not getattr(response, "status_code", 0) or response.status_code >= 400:
+                print(f"[Recharge] OpenRouter HTTP error (model={model_name}): {getattr(response, 'status_code', '?')}")
+                continue
 
-            content_text = json_data["choices"][0]["message"]["content"]
-            content_json = json.loads(content_text)
-            keypad_layout_data = content_json["keypad_layout"]
-        except Exception as e:
-            print(f"[Recharge] OpenRouter response parsing failed: {e}")
-            return None
+            try:
+                json_data = response.json()
+                print("[Recharge] OpenRouter response (formatted):")
+                print(json.dumps(json_data, ensure_ascii=False, indent=2))
 
-        # 정규화/검증 (원 코드와 동일한 규칙 유지)
-        if len(keypad_layout_data) == 20:
-            keypad_layout: List[int] = []
-            seen = set()
-            for x in keypad_layout_data:
-                if x not in seen:
-                    keypad_layout.append(x)
-                    seen.add(x)
-        elif len(keypad_layout_data) == 9:
-            keypad_layout = list(keypad_layout_data)
-            missing = None
-            for num in range(10):
-                if num not in keypad_layout_data:
-                    missing = num
-                    break
-            if missing is not None:
-                keypad_layout.append(missing)
-        elif len(keypad_layout_data) == 18:
-            keypad_layout = []
-            seen = set()
-            for x in keypad_layout_data:
-                if x not in seen:
-                    keypad_layout.append(x)
-                    seen.add(x)
-            missing = None
-            for num in range(10):
-                if num not in keypad_layout_data:
-                    missing = num
-                    break
-            if missing is not None:
-                keypad_layout.append(missing)
-        elif len(keypad_layout_data) == 10:
-            keypad_layout = list(keypad_layout_data)
-        else:
-            print(f"[Recharge] Keypad layout data length is not 9, 10, 18 or 20: {len(keypad_layout_data)}")
-            return None
+                content_text = json_data["choices"][0]["message"]["content"]
+                content_json = json.loads(content_text)
+                keypad_layout_data = content_json["keypad_layout"]
+            except Exception as e:
+                print(f"[Recharge] OpenRouter response parsing failed (model={model_name}): {e}")
+                continue
 
-        if len(keypad_layout) != 10:
-            return None
-        if any(type(x) != int for x in keypad_layout):
-            return None
-        if set(keypad_layout) != set(range(10)):
-            return None
-        return keypad_layout
+            # 아래 정규화/검증 로직은 성공 시에만 반환하며, 실패 시 다음 모델로 시도합니다.
+            if len(keypad_layout_data) == 20:
+                keypad_layout: List[int] = []
+                seen = set()
+                for x in keypad_layout_data:
+                    if x not in seen:
+                        keypad_layout.append(x)
+                        seen.add(x)
+            elif len(keypad_layout_data) == 9:
+                keypad_layout = list(keypad_layout_data)
+                missing = None
+                for num in range(10):
+                    if num not in keypad_layout_data:
+                        missing = num
+                        break
+                if missing is not None:
+                    keypad_layout.append(missing)
+            elif len(keypad_layout_data) == 18:
+                keypad_layout = []
+                seen = set()
+                for x in keypad_layout_data:
+                    if x not in seen:
+                        keypad_layout.append(x)
+                        seen.add(x)
+                missing = None
+                for num in range(10):
+                    if num not in keypad_layout_data:
+                        missing = num
+                        break
+                if missing is not None:
+                    keypad_layout.append(missing)
+            elif len(keypad_layout_data) == 10:
+                keypad_layout = list(keypad_layout_data)
+            else:
+                print(f"[Recharge] Keypad layout data length is not 9, 10, 18 or 20: {len(keypad_layout_data)} (model={model_name})")
+                continue
+
+            if len(keypad_layout) != 10:
+                continue
+            if any(type(x) != int for x in keypad_layout):
+                continue
+            if set(keypad_layout) != set(range(10)):
+                continue
+            return keypad_layout
+
+        print("[Recharge] All models failed to produce a valid keypad layout")
+        return None
 
     def _find_keypad_element(self, wait: WebDriverWait) -> WebElement:
         """키패드 루트 요소를 탐색합니다. 우선 id, 실패 시 일반 클래스 선택자로 재시도."""
