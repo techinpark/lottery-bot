@@ -145,8 +145,13 @@ class Recharge:
         # 하드코딩된 모델 목록 (필요 시 이 배열만 수정하세요)
         models: List[str] = [
             "google/gemini-2.0-flash-exp:free",
+            "google/gemma-3-27b-it:free",
+            "nvidia/nemotron-nano-12b-v2-vl:free",
             "mistralai/mistral-small-3.2-24b-instruct:free",
+            "mistralai/mistral-small-3.1-24b-instruct:free",
+            "qwen/qwen2.5-vl-32b-instruct:free",
             "google/gemma-3-4b-it:free",
+            "google/gemma-3-12b-it:free",
         ]
 
         if not api_key:
@@ -218,7 +223,28 @@ Output only the numeric array, nothing else — no explanations or text."},
                 continue
 
             if not getattr(response, "status_code", 0) or response.status_code >= 400:
-                print(f"[Recharge] OpenRouter HTTP error (model={model_name}): {getattr(response, 'status_code', '?')}")
+                status_code = getattr(response, "status_code", "?")
+                reason = getattr(response, "reason", "")
+                body_text = ""
+                try:
+                    body_text = response.text or ""
+                except Exception:
+                    body_text = ""
+                err_message = ""
+                try:
+                    j = response.json()
+                    if isinstance(j, dict):
+                        if "error" in j:
+                            err_val = j["error"]
+                            if isinstance(err_val, dict):
+                                err_message = str(err_val.get("message") or err_val.get("error") or "")
+                            else:
+                                err_message = str(err_val)
+                        elif "message" in j:
+                            err_message = str(j.get("message") or "")
+                except Exception:
+                    pass
+                print(f"[Recharge] OpenRouter HTTP error (model={model_name}): status={status_code} reason={reason} message={err_message} body={body_text[:500]}")
                 continue
 
             try:
