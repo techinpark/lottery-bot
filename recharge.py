@@ -146,10 +146,10 @@ class Recharge:
         models: List[str] = [
             "google/gemini-2.0-flash-exp:free",
             "google/gemma-3-27b-it:free",
-            "nvidia/nemotron-nano-12b-v2-vl:free",
+            # "nvidia/nemotron-nano-12b-v2-vl:free",
             "mistralai/mistral-small-3.2-24b-instruct:free",
             "mistralai/mistral-small-3.1-24b-instruct:free",
-            "qwen/qwen2.5-vl-32b-instruct:free",
+            # "qwen/qwen2.5-vl-32b-instruct:free",
             "google/gemma-3-4b-it:free",
             "google/gemma-3-12b-it:free",
         ]
