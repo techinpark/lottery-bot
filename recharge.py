@@ -144,11 +144,13 @@ class Recharge:
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         # 하드코딩된 모델 목록 (필요 시 이 배열만 수정하세요)
         models: List[str] = [
-            "google/gemini-2.0-flash-exp:free",
+            "openrouter/sherlock-think-alpha",
+            "openrouter/sherlock-dash-alpha",
             "google/gemma-3-27b-it:free",
+            "google/gemini-2.0-flash-exp:free",
             # "nvidia/nemotron-nano-12b-v2-vl:free",
-            "mistralai/mistral-small-3.2-24b-instruct:free",
             "mistralai/mistral-small-3.1-24b-instruct:free",
+            "mistralai/mistral-small-3.2-24b-instruct:free",
             # "qwen/qwen2.5-vl-32b-instruct:free",
             "google/gemma-3-4b-it:free",
             "google/gemma-3-12b-it:free",
@@ -184,7 +186,7 @@ Your task: \
 2. Identify and extract only the 10 digits (0-9) visible inside the left keypad area. \
 3. Read the digits in the left keypad in row-major order (left to right, top to bottom). \
 4. Return the result as a numeric array containing exactly 10 numbers. \
-Example output: [6, 7, 8, 3, 9, 5, 4, 1, 0, 2]. \
+Example output: { "keypad_layout": [6, 7, 8, 3, 9, 5, 4, 1, 0, 2] } \
 Output only the numeric array, nothing else — no explanations or text."},
                             {"type": "image_url", "image_url": {"url": layout_img_src}},
                         ],
@@ -254,7 +256,7 @@ Output only the numeric array, nothing else — no explanations or text."},
 
                 content_text = json_data["choices"][0]["message"]["content"]
                 content_json = json.loads(content_text)
-                keypad_layout_data = content_json["keypad_layout"]
+                keypad_layout_data = content_json["keypad_layout"] or content_json
             except Exception as e:
                 print(f"[Recharge] OpenRouter response parsing failed (model={model_name}): {e}")
                 continue
