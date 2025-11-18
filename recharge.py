@@ -186,7 +186,7 @@ Your task: \
 2. Identify and extract only the 10 digits (0-9) visible inside the left keypad area. \
 3. Read the digits in the left keypad in row-major order (left to right, top to bottom). \
 4. Return the result as a numeric array containing exactly 10 numbers. \
-Example output: { "keypad_layout": [6, 7, 8, 3, 9, 5, 4, 1, 0, 2] } \
+Example output: { \"keypad_layout\": [6, 7, 8, 3, 9, 5, 4, 1, 0, 2] } \
 Output only the numeric array, nothing else — no explanations or text."},
                             {"type": "image_url", "image_url": {"url": layout_img_src}},
                         ],
