@@ -349,7 +349,6 @@ Output only the numeric array, nothing else — no explanations or text."},
             try:
                 wait.until(EC.element_to_be_clickable(el))
                 el.click()
-                print(f"[Recharge] Keypad clicked index={num} coords={coords} action={action}")
             except Exception as _e:
                 print(f"[Recharge] Keypad click failed index={num} coords={coords} action={action}: {_e}")
                 traceback.print_exc()
