@@ -257,7 +257,7 @@ Output only the numeric array, nothing else — no explanations or text."},
                 content_text = json_data["choices"][0]["message"]["content"]
                 content_json = json.loads(content_text)
                 # keypad_layout_data = content_json["keypad_layout"] or content_json
-                keypad_layout_data = content_json if isinstance(my_variable, list) else content_json["keypad_layout"]
+                keypad_layout_data = content_json if isinstance(content_json, list) else content_json["keypad_layout"]
             except Exception as e:
                 print(f"[Recharge] OpenRouter response parsing failed (model={model_name}): {e}")
                 continue
