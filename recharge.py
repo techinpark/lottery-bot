@@ -144,8 +144,8 @@ class Recharge:
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         # 하드코딩된 모델 목록 (필요 시 이 배열만 수정하세요)
         models: List[str] = [
-            "openrouter/sherlock-think-alpha",
-            "openrouter/sherlock-dash-alpha",
+            "x-ai/grok-4.1-fast",
+            "x-ai/grok-4.1-fast:free",
             "google/gemma-3-27b-it:free",
             "google/gemini-2.0-flash-exp:free",
             # "nvidia/nemotron-nano-12b-v2-vl:free",
@@ -256,7 +256,8 @@ Output only the numeric array, nothing else — no explanations or text."},
 
                 content_text = json_data["choices"][0]["message"]["content"]
                 content_json = json.loads(content_text)
-                keypad_layout_data = content_json["keypad_layout"] or content_json
+                # keypad_layout_data = content_json["keypad_layout"] or content_json
+                keypad_layout_data = content_json if isinstance(my_variable, list) else content_json["keypad_layout"]
             except Exception as e:
                 print(f"[Recharge] OpenRouter response parsing failed (model={model_name}): {e}")
                 continue
