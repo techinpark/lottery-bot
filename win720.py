@@ -122,6 +122,7 @@ class Win720:
             html = res.text
             soup = BS(html, "html5lib")
             found = soup.find("strong", id="drwNo720")
+            if found:
                 return str(int(found.text) - 1)
             else:
                 raise ValueError("drwNo720 not found")
@@ -245,30 +246,33 @@ class Win720:
             "sortOrder": "DESC"
         }
 
-        res = self.http_client.post(
-            "https://dhlottery.co.kr/myPage.do?method=lottoBuyList",
-            headers=headers,
-            data=data
-        )
-
-        html = res.text
-        soup = BS(html, "html5lib")
-        
-        winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")       
-
         result_data = {
             "data": "no winning data"
         }
 
-        if len(winnings) == 1:
-            return result_data
+        try:
+            res = self.http_client.post(
+                "https://dhlottery.co.kr/myPage.do?method=lottoBuyList",
+                headers=headers,
+                data=data
+            )
 
-        result_data = {
-            "round": winnings[2].text.strip(),
-            "money": ",".join([ winnings[6+(i*8)].text.strip() for i in range(0,int(len(winnings)/7))]) ,
-            "purchased_date": winnings[0].text.strip(),
-            "winning_date": winnings[7].text.strip()
-        }
+            html = res.text
+            soup = BS(html, "html5lib")
+            
+            winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")       
+
+            if len(winnings) == 1:
+                return result_data
+
+            result_data = {
+                "round": winnings[2].text.strip(),
+                "money": ",".join([ winnings[6+(i*8)].text.strip() for i in range(0,int(len(winnings)/7))]) ,
+                "purchased_date": winnings[0].text.strip(),
+                "winning_date": winnings[7].text.strip()
+            }
+        except:
+            pass
 
         return result_data
     
