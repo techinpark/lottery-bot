@@ -18,11 +18,12 @@ class Lotto645Mode(Enum):
 class Lotto645:
 
     _REQ_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Connection": "keep-alive",
         "Cache-Control": "max-age=0",
-        "sec-ch-ua": '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+        "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
         "Upgrade-Insecure-Requests": "1",
         "Origin": "https://ol.dhlottery.co.kr",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -49,8 +50,9 @@ class Lotto645:
         assert type(mode) == Lotto645Mode
 
         headers = self._generate_req_headers(auth_ctrl)
+        
         requirements = self._getRequirements(headers)
-
+        
         data = (
             self._generate_body_for_auto_mode(cnt, requirements)
             if mode == Lotto645Mode.AUTO
@@ -64,23 +66,16 @@ class Lotto645:
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController
-
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
 
     def _generate_body_for_auto_mode(self, cnt: int, requirements: list) -> dict:
         assert type(cnt) == int and 1 <= cnt <= 5
-
-        SLOTS = [
-            "A",
-            "B",
-            "C",
-            "D",
-            "E",
-        ]  
+        
+        SLOTS = ["A", "B", "C", "D", "E"]  
 
         return {
-            "round": self._get_round(),
-            "direct": requirements[0],  # TODO: test if this can be comment
+            "round": requirements[3],
+            "direct": requirements[0], 
             "nBuyAmount": str(1000 * cnt),
             "param": json.dumps(
                 [
@@ -90,23 +85,24 @@ class Lotto645:
             ),
             'ROUND_DRAW_DATE' : requirements[1],
             'WAMT_PAY_TLMT_END_DT' : requirements[2],
-            "gameCnt": cnt
+            "gameCnt": cnt,
+            "saleMdaDcd": "10"
         }
 
     def _generate_body_for_manual(self, cnt: int) -> dict:
         assert type(cnt) == int and 1 <= cnt <= 5
-
         raise NotImplementedError()
 
-    def _getRequirements(self, headers: dict) -> list: 
+    def _getRequirements(self, headers: dict) -> list:
         org_headers = headers.copy()
-
-        headers["Referer"] ="https://ol.dhlottery.co.kr/olotto/game/game645.do"
-        headers["Content-Type"] = "application/json; charset=UTF-8"
+        headers["Referer"] = "https://ol.dhlottery.co.kr/olotto/game/game645.do"
+        headers["Origin"] = "https://ol.dhlottery.co.kr"
+        headers["X-Requested-With"] = "XMLHttpRequest"
+        headers["Sec-Fetch-Site"] = "same-origin"
+        headers["Sec-Fetch-Mode"] = "cors"
+        headers["Sec-Fetch-Dest"] = "empty"
         headers["X-Requested-With"] ="XMLHttpRequest"
 
-
-		#no param needed at now
         res = self.http_client.post(
             url="https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
             headers=headers
@@ -114,43 +110,90 @@ class Lotto645:
         
         direct = json.loads(res.text)["ready_ip"]
         
-
-        res = self.http_client.post(
+        html_headers = self._REQ_HEADERS.copy()
+        html_headers.pop("Origin", None)
+        html_headers.pop("Content-Type", None)
+        html_headers["Referer"] = "https://dhlottery.co.kr/common.do?method=main"
+        
+        if headers.get("Cookie"):
+            html_headers["Cookie"] = headers.get("Cookie")
+            
+        res = self.http_client.get(
             url="https://ol.dhlottery.co.kr/olotto/game/game645.do", 
-            headers=org_headers
+            headers=html_headers
         )
         html = res.text
-        soup = BS(
-            html, "html5lib"
-        )
-        draw_date = soup.find("input", id="ROUND_DRAW_DATE").get('value')
-        tlmt_date = soup.find("input", id="WAMT_PAY_TLMT_END_DT").get('value')
+        soup = BS(html, "html5lib")
+        
+        try:
+            draw_date_el = soup.find("input", id="ROUND_DRAW_DATE")
+            tlmt_date_el = soup.find("input", id="WAMT_PAY_TLMT_END_DT")
+            
+            if draw_date_el and tlmt_date_el:
+                draw_date = draw_date_el.get('value')
+                tlmt_date = tlmt_date_el.get('value')
+            else:
+                raise ValueError("Date inputs not found")
+        except Exception as e:
+            today = datetime.datetime.today()
+            days_ahead = (5 - today.weekday()) % 7
+            next_saturday = today + datetime.timedelta(days=days_ahead)
+            draw_date = next_saturday.strftime("%Y-%m-%d")
+            
+            limit_date = next_saturday + datetime.timedelta(days=366)
+            tlmt_date = limit_date.strftime("%Y-%m-%d")
 
-        return [direct, draw_date, tlmt_date]
+        
+        cur_round_input = soup.find("input", id="curRound")
+        if cur_round_input:
+             current_round = cur_round_input.get('value')
+        else:
+             current_round = self._get_round()
+
+        return [direct, draw_date, tlmt_date, current_round]
 
     def _get_round(self) -> str:
-        res = self.http_client.get("https://www.dhlottery.co.kr/common.do?method=main")
-        html = res.text
-        soup = BS(
-            html, "html5lib"
-        )  # 'html5lib' : in case that the html don't have clean tag pairs
-        last_drawn_round = int(soup.find("strong", id="lottoDrwNo").text)
-        return str(last_drawn_round + 1)
+        try:
+            res = self.http_client.get(
+                "https://dhlottery.co.kr/common.do?method=main",
+                headers=self._REQ_HEADERS
+            )
+            html = res.text
+            soup = BS(html, "html5lib")
+            found = soup.find("strong", id="lottoDrwNo")
+            if found:
+                last_drawn_round = int(found.text)
+                return str(last_drawn_round + 1)
+            else:
+                 raise ValueError("lottoDrwNo not found")
+        except Exception as e:
+            base_date = datetime.datetime(2024, 12, 28)
+            base_round = 1152
+            
+            today = datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            days_ahead = (5 - today.weekday()) % 7
+            next_saturday = today + datetime.timedelta(days=days_ahead)
+            
+            weeks = (next_saturday - base_date).days // 7
+            return str(base_round + weeks)
 
     def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
+        try:
+            headers = self._generate_req_headers(auth_ctrl)
+            res = self.http_client.post(
+                url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
+                headers=headers
+            )
 
-        headers = self._generate_req_headers(auth_ctrl)
-        res = self.http_client.post(
-            url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
-            headers=headers
-        )
-
-        html = res.text
-        soup = BS(
-            html, "html5lib"
-        )
-        balance = soup.find("p", class_="total_new").find('strong').text
-        return balance
+            html = res.text
+            soup = BS(
+                html, "html5lib"
+            )
+            balance = soup.find("p", class_="total_new").find('strong').text
+            return balance
+        except Exception as e:
+            return "0 (Parse Error)"
         
     def _try_buying(self, headers: dict, data: dict) -> dict:
         assert type(headers) == dict

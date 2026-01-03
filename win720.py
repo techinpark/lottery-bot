@@ -14,6 +14,7 @@ from Crypto.Random import get_random_bytes
 from HttpClient import HttpClientSingleton
 
 import auth
+import re
 
 class Win720:
 
@@ -26,9 +27,9 @@ class Win720:
     _unpad = lambda self, s : s[:-ord(s[len(s)-1:])]
 
     _REQ_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Connection": "keep-alive",
-        "sec-ch-ua": '"Not_A Brand";v="99", "Google Chrome";v="109", "Chromium";v="109"',
+        "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec-ch-ua-mobile": "?0",
         "Origin": "https://el.dhlottery.co.kr",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -55,13 +56,34 @@ class Win720:
         assert type(auth_ctrl) == auth.AuthController
 
         headers = self._generate_req_headers(auth_ctrl)
+        
+        requirements = self._getRequirements(headers)
 
-        self.keyCode = headers['Cookie'].split("JSESSIONID=")[1]
+        jsessionid = auth_ctrl.http_client.session.cookies.get("JSESSIONID")
+        if not jsessionid:
+             jsessionid = auth_ctrl._AUTH_CRED
+        
+        self.keyCode = jsessionid
         win720_round = self._get_round()
         
         makeAutoNum_ret = self._makeAutoNumbers(auth_ctrl, win720_round)
-        parsed_ret = self._decText(json.loads(makeAutoNum_ret)['q']) 
-        extracted_num = json.loads(parsed_ret)["selLotNo"]
+        
+        try:
+            q_val = json.loads(makeAutoNum_ret)['q']
+        except Exception as e:
+            raise e
+            
+        try:
+            decrypted = self._decText(q_val)
+        except Exception as e:
+            raise e
+        
+        if "resultMsg" in decrypted and "ERR_" in decrypted and ":" in decrypted:
+             decrypted = re.sub(r'("resultMsg":)([^",}]+)([,}])', r'\1"\2"\3', decrypted)
+
+        parsed_ret = decrypted
+        extracted_num = json.loads(parsed_ret).get("selLotNo", "")
+
         orderNo, orderDate = self._doOrderRequest(auth_ctrl, win720_round, extracted_num)
         
         body = json.loads(self._doConnPro(auth_ctrl, win720_round, extracted_num, username, orderNo, orderDate))
@@ -72,18 +94,52 @@ class Win720:
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
+    
+    def _getRequirements(self, headers: dict) -> list:
+        org_headers = headers.copy()
+        
+        headers["Referer"] = "https://el.dhlottery.co.kr/game/pension720/game.jsp"
+        headers["Content-Type"] = "application/json" 
+        headers["X-Requested-With"] = "XMLHttpRequest"
+
+        try:
+             res = self.http_client.post(
+                url="https://el.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
+                headers=headers
+            )
+             direct = json.loads(res.text)["ready_ip"]
+        except:
+             pass
+        
+        return []
 
     def _get_round(self) -> str:
-        res = self.http_client.get("https://www.dhlottery.co.kr/common.do?method=main")
-        html = res.text
-        soup = BS(
-            html, "html5lib"
-        )  # 'html5lib' : in case that the html don't have clean tag pairs
-        last_drawn_round = int(soup.find("strong", id="drwNo720").text)
-        return str(last_drawn_round + 1)
+        try:
+            res = self.http_client.get(
+                "https://dhlottery.co.kr/common.do?method=main",
+                headers=self._REQ_HEADERS
+            )
+            html = res.text
+            soup = BS(html, "html5lib")
+            found = soup.find("strong", id="drwNo720")
+                return str(int(found.text) - 1)
+            else:
+                raise ValueError("drwNo720 not found")
+        except:
+             base_date = datetime.datetime(2024, 12, 26)
+             base_round = 244
+             
+             today = datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+             
+             days_ahead = (3 - today.weekday()) % 7
+             next_thursday = today + datetime.timedelta(days=days_ahead)
+             
+             weeks = (next_thursday - base_date).days // 7
+             
+             return str(base_round + weeks - 1)
 
     def _makeAutoNumbers(self, auth_ctrl: auth.AuthController, win720_round: str) -> str:
-        payload = "ROUND={}&SEL_NO=&BUY_CNT=&AUTO_SEL_SET=SA&SEL_CLASS=&BUY_TYPE=A&ACCS_TYPE=01".format(win720_round)
+        payload = "ROUND={}&round={}&LT_EPSD={}&SEL_NO=&BUY_CNT=&AUTO_SEL_SET=SA&SEL_CLASS=&BUY_TYPE=A&ACCS_TYPE=01".format(win720_round, win720_round, win720_round)
         headers = self._generate_req_headers(auth_ctrl)
         
         data = {
@@ -91,7 +147,7 @@ class Win720:
         }
 
         res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/game/pension720/process/makeAutoNo.jsp", 
+            url="https://el.dhlottery.co.kr/makeAutoNo.do", 
             headers=headers,
             data=data
         )
@@ -99,7 +155,7 @@ class Win720:
         return res.text
 
     def _doOrderRequest(self, auth_ctrl: auth.AuthController, win720_round: str, extracted_num: str) -> str:
-        payload = "ROUND={}&AUTO_SEL_SET=SA&SEL_CLASS=&SEL_NO={}&BUY_TYPE=M&BUY_CNT=5".format(win720_round, extracted_num)
+        payload = "ROUND={}&round={}&LT_EPSD={}&AUTO_SEL_SET=SA&SEL_CLASS=&SEL_NO={}&BUY_TYPE=M&BUY_CNT=5".format(win720_round, win720_round, win720_round, extracted_num)
         headers = self._generate_req_headers(auth_ctrl)
 
         data = {
@@ -107,7 +163,7 @@ class Win720:
         }
 
         res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/game/pension720/process/makeOrderNo.jsp", 
+            url="https://el.dhlottery.co.kr/makeOrderNo.do", 
             headers=headers,
             data=data
         )
@@ -125,7 +181,7 @@ class Win720:
         }
         
         res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/game/pension720/process/connPro.jsp", 
+            url="https://el.dhlottery.co.kr/connPro.do", 
             headers=headers,
             data=data
         )
@@ -158,19 +214,21 @@ class Win720:
         return self._unpad(aes.decrypt(base64.b64decode(cryptText)).decode('utf-8'))
 
     def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
-        
-        headers = self._generate_req_headers(auth_ctrl)
-        res = self.http_client.post(
-            url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
-            headers=headers
-        )
+        try:
+            headers = self._generate_req_headers(auth_ctrl)
+            res = self.http_client.post(
+                url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
+                headers=headers
+            )
 
-        html = res.text
-        soup = BS(
-            html, "html5lib"
-        )
-        balance = soup.find("p", class_="total_new").find('strong').text
-        return balance
+            html = res.text
+            soup = BS(
+                html, "html5lib"
+            )
+            balance = soup.find("p", class_="total_new").find('strong').text
+            return balance
+        except:
+             return "0 (Parse Error)"
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController
