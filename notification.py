@@ -83,6 +83,8 @@ class Notification:
 
             self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
         except KeyError:
+            message = "로또 - 다음 기회에... 🫠"
+            self._send_discord_webhook(webhook_url, message)
             return
 
     def send_win720_winning_message(self, winning: dict, webhook_url: str) -> None: 
