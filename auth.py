@@ -1,4 +1,5 @@
 import copy
+import datetime
 import requests
 import json
 import base64
@@ -35,8 +36,8 @@ class AuthController:
         assert type(user_id) == str
         assert type(password) == str
 
-        self.http_client.get("https://dhlottery.co.kr/")
-        self.http_client.get("https://dhlottery.co.kr/user.do?method=login")
+        self.http_client.get("https://dhlottery.co.kr/", headers=self._REQ_HEADERS)
+        self.http_client.get("https://dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
 
         modulus, exponent = self._get_rsa_key()
 
@@ -148,8 +149,71 @@ class AuthController:
         if new_jsessionid:
              self._update_auth_cred(new_jsessionid)
 
+        try:
+             self.http_client.get("https://dhlottery.co.kr/main", headers=self._REQ_HEADERS)
+        except Exception:
+             pass 
+             
         return res
 
     def _update_auth_cred(self, j_session_id: str) -> None:
         assert type(j_session_id) == str
         self._AUTH_CRED = j_session_id
+
+    def get_current_session_id(self) -> str:
+        for cookie in self.http_client.session.cookies:
+            if cookie.name == "JSESSIONID":
+                return cookie.value
+        
+        for cookie in self.http_client.session.cookies:
+             if cookie.name == "DHJSESSIONID":
+                 return cookie.value
+        
+        if self._AUTH_CRED:
+            return self._AUTH_CRED
+            
+    def get_user_balance(self) -> str:
+        try:
+             try:
+                 self.http_client.get("https://dhlottery.co.kr/mypage/home")
+             except:
+                 pass
+
+             timestamp = int(datetime.datetime.now().timestamp() * 1000)
+             url = f"https://dhlottery.co.kr/mypage/selectUserMndp.do?_={timestamp}"
+             
+             headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                "Referer": "https://dhlottery.co.kr/mypage/home",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/json;charset=UTF-8",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "requestMenuUri": "/mypage/home",
+                "AJAX": "true",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Dest": "empty"
+             }
+             
+             res = self.http_client.get(url, headers=headers)
+             
+             txt = res.text.strip()
+             if txt.startswith("<"):
+                  return "확인 불가 (로그인/설정)"
+
+             data = json.loads(txt)
+             
+             if 'data' in data and isinstance(data['data'], dict):
+                 data = data['data']
+
+             if 'userMndp' in data:
+                 data = data['userMndp']
+                 
+             if 'totalAmt' in data:
+                 val = str(data['totalAmt']).replace(',', '')
+                 return f"{int(val):,}원"
+             
+             return "0원"
+
+        except Exception as e:
+             return f"0 (System Error: {str(e)})"

@@ -7,10 +7,12 @@ class Notification:
 
         result = body.get("result", {})
         if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":  
+            message = f"로또 구매 실패 (`{result.get('resultMsg', 'Unknown Error')}`) 남은잔액 : {body.get('balance', '확인불가')}"
+            self._send_discord_webhook(webhook_url, message)
             return
 
         lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
-        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
+        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body.get('balance', '확인불가')}\n```{lotto_number_str}```"
         self._send_discord_webhook(webhook_url, message)
 
     def make_lotto_number_message(self, lotto_number: list) -> str:
@@ -30,12 +32,23 @@ class Notification:
     def send_win720_buying_message(self, body: dict, webhook_url: str) -> None:
         
         if body.get("resultCode") != '100':  
+            message = f"연금복권 구매 실패 (`{body.get('resultMsg', 'Unknown Error')}`) 남은잔액 : {body.get('balance', '확인불가')}"
+            self._send_discord_webhook(webhook_url, message)
             return       
 
-        win720_round = body.get("resultMsg").split("|")[3]
+        win720_round = body.get("round", "?")
+        if win720_round == "?":
+            try:
+                 win720_round = body.get("saleTicket", "").split("|")[-2]
+            except:
+                 win720_round = "?"
 
-        win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
-        message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```\n{win720_number_str}```"
+        if not body.get("saleTicket"):
+            win720_number_str = "번호 정보 없음"
+        else:
+            win720_number_str = self.make_win720_number_message(body.get("saleTicket"))
+
+        message = f"{win720_round}회 연금복권 구매 완료 :moneybag: 남은잔액 : {body.get('balance', '확인불가')}\n```\n{win720_number_str}```"
         self._send_discord_webhook(webhook_url, message)
 
     def make_win720_number_message(self, win720_number: str) -> str:

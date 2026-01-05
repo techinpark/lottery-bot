@@ -59,9 +59,7 @@ class Win720:
         
         requirements = self._getRequirements(headers)
 
-        jsessionid = auth_ctrl.http_client.session.cookies.get("JSESSIONID")
-        if not jsessionid:
-             jsessionid = auth_ctrl._AUTH_CRED
+        jsessionid = auth_ctrl.get_current_session_id()
         
         self.keyCode = jsessionid
         win720_round = self._get_round()
@@ -70,6 +68,8 @@ class Win720:
         
         try:
             q_val = json.loads(makeAutoNum_ret)['q']
+        except json.JSONDecodeError:
+            raise ValueError(f"Failed to parse makeAutoNum response: {makeAutoNum_ret[:100]}...")
         except Exception as e:
             raise e
             
@@ -78,17 +78,24 @@ class Win720:
         except Exception as e:
             raise e
         
-        if "resultMsg" in decrypted and "ERR_" in decrypted and ":" in decrypted:
-             decrypted = re.sub(r'("resultMsg":)([^",}]+)([,}])', r'\1"\2"\3', decrypted)
+        if "resultMsg" in decrypted and ":" in decrypted:
+             decrypted = re.sub(r'("resultMsg":\s*)([^",}]*)([,}])', r'\1"\2"\3', decrypted)
 
         parsed_ret = decrypted
-        extracted_num = json.loads(parsed_ret).get("selLotNo", "")
+        try:
+           extracted_num = json.loads(parsed_ret).get("selLotNo", "")
+        except ValueError:
+             raise ValueError(f"Failed to parse decrypted parsed_ret: {repr(parsed_ret)[:500]}... (Key: {self.keyCode[:5]}...{self.keyCode[-5:] if len(self.keyCode)>5 else ''})")
+
+        if not extracted_num:
+             return json.loads(parsed_ret)
 
         orderNo, orderDate = self._doOrderRequest(auth_ctrl, win720_round, extracted_num)
         
         body = json.loads(self._doConnPro(auth_ctrl, win720_round, extracted_num, username, orderNo, orderDate))
 
         self._show_result(body)
+        body['round'] = win720_round
         return body
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
@@ -169,9 +176,11 @@ class Win720:
             data=data
         )
 
-        ret = json.loads(self._decText(json.loads(res.text)['q']))
-
-        return ret['orderNo'], ret['orderDate']
+        try:
+            ret = json.loads(self._decText(json.loads(res.text)['q']))
+            return ret['orderNo'], ret['orderDate']
+        except ValueError:
+             raise ValueError(f"Failed to parse doOrderRequest/decText: {res.text[:100]}...")
 
     def _doConnPro(self, auth_ctrl: auth.AuthController, win720_round: str, extracted_num: str, username: str, orderNo: str, orderDate: str) -> str:
         payload = "ROUND={}&FLAG=&BUY_KIND=01&BUY_NO={}&BUY_CNT=5&BUY_SET_TYPE=SA%2CSA%2CSA%2CSA%2CSA&BUY_TYPE=A%2CA%2CA%2CA%2CA%2C&CS_TYPE=01&orderNo={}&orderDate={}&TRANSACTION_ID=&WIN_DATE=&USER_ID={}&PAY_TYPE=&resultErrorCode=&resultErrorMsg=&resultOrderNo=&WORKING_FLAG=true&NUM_CHANGE_TYPE=&auto_process=N&set_type=SA&classnum=&selnum=&buytype=M&num1=&num2=&num3=&num4=&num5=&num6=&DSEC=34&CLOSE_DATE=&verifyYN=N&curdeposit=&curpay=5000&DROUND={}&DSEC=0&CLOSE_DATE=&verifyYN=N&lotto720_radio_group=on".format(win720_round,"".join([ "{}{}%2C".format(i,extracted_num) for i in range(1,6)])[:-3],orderNo, orderDate, username, win720_round)
@@ -187,9 +196,11 @@ class Win720:
             data=data
         )
 
-        ret = self._decText(json.loads(res.text)['q'])
-        
-        return ret
+        try:
+            ret = self._decText(json.loads(res.text)['q'])
+            return ret
+        except ValueError:
+             raise ValueError(f"Failed to parse doConnPro: {res.text[:100]}...")
 
     def _encText(self, plainText: str) -> str:
         encSalt = get_random_bytes(32)
@@ -212,24 +223,17 @@ class Win720:
 
         aes = AES.new(decKey, AES.MODE_CBC, decIv)
 
-        return self._unpad(aes.decrypt(base64.b64decode(cryptText)).decode('utf-8'))
-
-    def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
+        decrypted_bytes = self._unpad(aes.decrypt(base64.b64decode(cryptText)))
         try:
-            headers = self._generate_req_headers(auth_ctrl)
-            res = self.http_client.post(
-                url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
-                headers=headers
-            )
+            return decrypted_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                return decrypted_bytes.decode('euc-kr')
+            except UnicodeDecodeError:
+                return f'{{"resultMsg": "Decryption Failed (Raw: {decrypted_bytes.hex()[:20]}...)"}}'
 
-            html = res.text
-            soup = BS(
-                html, "html5lib"
-            )
-            balance = soup.find("p", class_="total_new").find('strong').text
-            return balance
-        except:
-             return "0 (Parse Error)"
+
+
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController

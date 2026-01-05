@@ -178,22 +178,9 @@ class Lotto645:
             weeks = (next_saturday - base_date).days // 7
             return str(base_round + weeks)
 
-    def get_balance(self, auth_ctrl: auth.AuthController) -> str: 
-        try:
-            headers = self._generate_req_headers(auth_ctrl)
-            res = self.http_client.post(
-                url="https://dhlottery.co.kr/userSsl.do?method=myPage", 
-                headers=headers
-            )
 
-            html = res.text
-            soup = BS(
-                html, "html5lib"
-            )
-            balance = soup.find("p", class_="total_new").find('strong').text
-            return balance
-        except Exception as e:
-            return "0 (Parse Error)"
+
+
         
     def _try_buying(self, headers: dict, data: dict) -> dict:
         assert type(headers) == dict
@@ -206,8 +193,14 @@ class Lotto645:
             headers=headers,
             data=data,
         )
-        res.encoding = "utf-8"
-        return json.loads(res.text)
+        if res.encoding == 'ISO-8859-1':
+             res.encoding = 'euc-kr'
+        
+        try:
+             return json.loads(res.text)
+        except UnicodeDecodeError:
+             res.encoding = 'euc-kr' 
+             return json.loads(res.text)
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController
