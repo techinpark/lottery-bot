@@ -32,19 +32,19 @@ def check_winning_win720(authCtrl: auth.AuthController) -> dict:
     item = pension.check_winning(authCtrl)
     return item
 
-def send_message(mode: int, lottery_type: int, response: dict, webhook_url: str):
+def send_message(mode: int, lottery_type: int, response: dict, webhook_url: str, platform: str = "slack"):
     notify = notification.Notification()
 
     if mode == 0:
         if lottery_type == 0:
-            notify.send_lotto_winning_message(response, webhook_url)
+            notify.send_lotto_winning_message(response, webhook_url, platform)
         else:
-            notify.send_win720_winning_message(response, webhook_url)
+            notify.send_win720_winning_message(response, webhook_url, platform)
     elif mode == 1: 
         if lottery_type == 0:
-            notify.send_lotto_buying_message(response, webhook_url)
+            notify.send_lotto_buying_message(response, webhook_url, platform)
         else:
-            notify.send_win720_buying_message(response, webhook_url)
+            notify.send_win720_buying_message(response, webhook_url, platform)
 
 def check():
     load_dotenv()
@@ -53,17 +53,21 @@ def check():
     password = os.environ.get('PASSWORD')
     slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
     discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+    
+    # Slack 우선, 없으면 Discord 사용
+    webhook_url = slack_webhook_url or discord_webhook_url
+    platform = "slack" if slack_webhook_url else "discord"
 
     globalAuthCtrl = auth.AuthController()
     globalAuthCtrl.login(username, password)
     
     response = check_winning_lotto645(globalAuthCtrl)
-    send_message(0, 0, response=response, webhook_url=discord_webhook_url)
+    send_message(0, 0, response=response, webhook_url=webhook_url, platform=platform)
 
     time.sleep(10)
     
     response = check_winning_win720(globalAuthCtrl)
-    send_message(0, 1, response=response, webhook_url=discord_webhook_url)
+    send_message(0, 1, response=response, webhook_url=webhook_url, platform=platform)
 
 def buy(): 
     
@@ -75,17 +79,21 @@ def buy():
     slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
     discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
     mode = "AUTO"
+    
+    # Slack 우선, 없으면 Discord 사용
+    webhook_url = slack_webhook_url or discord_webhook_url
+    platform = "slack" if slack_webhook_url else "discord"
 
     globalAuthCtrl = auth.AuthController()
     globalAuthCtrl.login(username, password)
 
     response = buy_lotto645(globalAuthCtrl, count, mode) 
-    send_message(1, 0, response=response, webhook_url=discord_webhook_url)
+    send_message(1, 0, response=response, webhook_url=webhook_url, platform=platform)
 
     time.sleep(10)
 
     response = buy_win720(globalAuthCtrl, username) 
-    send_message(1, 1, response=response, webhook_url=discord_webhook_url)
+    send_message(1, 1, response=response, webhook_url=webhook_url, platform=platform)
 
 def run():
     if len(sys.argv) < 2:
