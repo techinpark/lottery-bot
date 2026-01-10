@@ -7,6 +7,7 @@ from enum import Enum
 from bs4 import BeautifulSoup as BS
 
 import auth
+import common
 from HttpClient import HttpClientSingleton
 
 class Lotto645Mode(Enum):
@@ -18,7 +19,7 @@ class Lotto645Mode(Enum):
 class Lotto645:
 
     _REQ_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "User-Agent": auth.USER_AGENT,
         "Connection": "keep-alive",
         "Cache-Control": "max-age=0",
         "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
@@ -45,9 +46,9 @@ class Lotto645:
         cnt: int, 
         mode: Lotto645Mode
     ) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
-        assert type(cnt) == int and 1 <= cnt <= 5
-        assert type(mode) == Lotto645Mode
+        assert isinstance(auth_ctrl, auth.AuthController)
+        assert isinstance(cnt, int) and 1 <= cnt <= 5
+        assert isinstance(mode, Lotto645Mode)
 
         headers = self._generate_req_headers(auth_ctrl)
         
@@ -65,13 +66,11 @@ class Lotto645:
         return body
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
+        assert isinstance(auth_ctrl, auth.AuthController)
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
 
     def _generate_body_for_auto_mode(self, cnt: int, requirements: list) -> dict:
-        assert type(cnt) == int and 1 <= cnt <= 5
-        
-        SLOTS = ["A", "B", "C", "D", "E"]  
+        assert isinstance(cnt, int) and 1 <= cnt <= 5
 
         return {
             "round": requirements[3],
@@ -80,7 +79,7 @@ class Lotto645:
             "param": json.dumps(
                 [
                     {"genType": "0", "arrGameChoiceNum": None, "alpabet": slot}
-                    for slot in SLOTS[:cnt]
+                    for slot in common.SLOTS[:cnt]
                 ]
             ),
             'ROUND_DRAW_DATE' : requirements[1],
@@ -90,7 +89,7 @@ class Lotto645:
         }
 
     def _generate_body_for_manual(self, cnt: int) -> dict:
-        assert type(cnt) == int and 1 <= cnt <= 5
+        assert isinstance(cnt, int) and 1 <= cnt <= 5
         raise NotImplementedError()
 
     def _getRequirements(self, headers: dict) -> list:
@@ -183,8 +182,8 @@ class Lotto645:
 
         
     def _try_buying(self, headers: dict, data: dict) -> dict:
-        assert type(headers) == dict
-        assert type(data) == dict
+        assert isinstance(headers, dict)
+        assert isinstance(data, dict)
 
         headers["Content-Type"]  = "application/x-www-form-urlencoded; charset=UTF-8"
 
@@ -203,96 +202,140 @@ class Lotto645:
              return json.loads(res.text)
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
+        assert isinstance(auth_ctrl, auth.AuthController)
 
-        headers = self._generate_req_headers(auth_ctrl)
+        headers = self._REQ_HEADERS.copy()
+        headers["Referer"] = "https://www.dhlottery.co.kr/mypage/mylotteryledger"
+        headers.pop("Content-Type", None)
+        headers.pop("Origin", None)
 
-        parameters = self._make_search_date()
+        parameters = common.get_search_date_range()
 
-        data = {
-            "nowPage": 1, 
-            "searchStartDate": parameters["searchStartDate"],
-            "searchEndDate": parameters["searchEndDate"],
-            "winGrade": 2,
-            "lottoId": "LO40", 
-            "sortOrder": "DESC"
-        }
+        try:
+            self.http_client.get("https://www.dhlottery.co.kr/common.do?method=main", headers=headers)
+        except:
+            pass
 
         result_data = {
             "data": "no winning data"
         }
 
         try:
-            res = self.http_client.post(
-                "https://dhlottery.co.kr/myPage.do?method=lottoBuyList",
-                headers=headers,
-                data=data
-            )
-
-            html = res.text
-            soup = BS(html, "html5lib")
-
-            winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")
-
-            get_detail_info = winnings[3].find("a").get("href")
-
-            order_no, barcode, issue_no = get_detail_info.split("'")[1::2]
-            url = f"https://dhlottery.co.kr/myPage.do?method=lotto645Detail&orderNo={order_no}&barcode={barcode}&issueNo={issue_no}"
-
-            response = self.http_client.get(url)
-
-            soup = BS(response.text, "html5lib")
-
-            lotto_results = []
-
-            for li in soup.select("div.selected li"):
-                label = li.find("strong").find_all("span")[0].text.strip()
-                status = li.find("strong").find_all("span")[1].text.strip().replace("낙첨","0등")
-                nums = li.select("div.nums > span")
-
-                status = " ".join(status.split())
-
-                formatted_nums = []
-                for num in nums:
-                    ball = num.find("span", class_="ball_645")
-                    if ball:
-                        formatted_nums.append(f"✨{ball.text.strip()}")
-                    else:
-                        formatted_nums.append(num.text.strip())
-
-                lotto_results.append({
-                    "label": label,
-                    "status": status,
-                    "result": formatted_nums
-                })
-
-            if len(winnings) == 1:
-                return result_data
-
-            result_data = {
-                "round": winnings[2].text.strip(),
-                "money": winnings[6].text.strip(),
-                "purchased_date": winnings[0].text.strip(),
-                "winning_date": winnings[7].text.strip(),
-                "lotto_details": lotto_results
+            api_url = "https://www.dhlottery.co.kr/mypage/selectMyLotteryledger.do"
+            params = {
+                "srchStrDt": parameters["searchStartDate"],
+                "srchEndDt": parameters["searchEndDate"],
+                "ltGdsCd": "LO40",
+                "pageNum": 1,
+                "recordCountPerPage": 10
             }
-        except:
-            pass
+
+            res = self.http_client.get(api_url, params=params, headers=headers)
+            
+            if res.status_code != 200:
+                print(f"DEBUG: API Status {res.status_code}")
+                print(f"DEBUG: API Status {res.status_code}")
+                pass
+            
+            try:
+                data = res.json()
+                data = data.get("data", {})
+                if "list" not in data:
+                    print("DEBUG_DATA_LIST_MISSING_IN_DATA")
+            except Exception as e:
+                print(f"[Error] API JSON Parse Failed: {e}")
+                data = {}
+
+            if not data.get("list"):
+                 return {"data": "no winning data (empty list or API fail)"}
+
+            for item in data["list"]:
+                purchased_date = item.get("eltOrdrDt", "-")
+                round_no = item.get("ltEpsdView", "")
+                money = item.get("ltWnAmt", "-")
+                win_result = item.get("ltWnResult", "")
+                
+                if "회" in round_no:
+                    round_no = round_no.replace("회", "")
+                
+                if money == "0" or money == 0:
+                     money = "0 원"
+                else:
+                    money = f"{int(money):,} 원"
+
+                result_data = {
+                    "round": round_no,
+                    "money": money,
+                    "purchased_date": purchased_date,
+                    "winning_date": item.get("epsdRflDt", "-"),
+                    "lotto_details": [] 
+                }
+                
+                detail_url = "https://www.dhlottery.co.kr/mypage/lotto645TicketDetail.do"
+                detail_params = {
+                    "ltGdsCd": item.get("ltGdsCd"),
+                    "ltEpsd": item.get("ltEpsd"),
+                    "barcd": item.get("gmInfo"),
+                    "ntslOrdrNo": item.get("ntslOrdrNo"),
+                    "srchStrDt": params["srchStrDt"],
+                    "srchEndDt": params["srchEndDt"]
+                }
+                
+                try:
+                    res_detail = self.http_client.get(detail_url, params=detail_params, headers=headers)
+                    detail_data = res_detail.json()
+                    res_detail = self.http_client.get(detail_url, params=detail_params, headers=headers)
+                    detail_data = res_detail.json()
+                    detail_data = detail_data.get("data", detail_data)
+                    
+                    ticket = detail_data.get("ticket", {})
+                    if not ticket and "data" in detail_data:
+                         ticket = detail_data["data"].get("ticket", {})
+                         
+                    game_dtl = ticket.get("game_dtl", [])
+                    game_dtl = ticket.get("game_dtl", [])
+                    win_num = ticket.get("win_num", [])
+                    
+                    lotto_details = []
+                    
+                    for i, game in enumerate(game_dtl):
+                        label = common.SLOTS[i] if i < len(common.SLOTS) else "?"
+                        
+                        label = common.SLOTS[i] if i < len(common.SLOTS) else "?"
+                        
+                        rank = game.get("rank", "0")
+                        status = "낙첨" if rank == "0" else f"{rank}등"
+                        
+                        nums = game.get("num", [])
+                        formatted_nums = []
+                        for num in nums:
+                            if num in win_num:
+                                formatted_nums.append(f"✨{num}")
+                            else:
+                                formatted_nums.append(str(num))
+                        
+                        lotto_details.append({
+                            "label": label,
+                            "status": status,
+                            "result": formatted_nums
+                        })
+                    
+                    result_data["lotto_details"] = lotto_details
+
+                except Exception as e:
+                    print(f"[Error] Detail parse error: {e}")
+                
+                break
+ 
+                            
+        except Exception as e:
+            print(f"[Error] Lotto check error: {e}")
 
         return result_data
     
-    def _make_search_date(self) -> dict:
-        today = datetime.datetime.today()
-        today_str = today.strftime("%Y%m%d")
-        weekago = today - timedelta(days=7)
-        weekago_str = weekago.strftime("%Y%m%d")
-        return {
-            "searchStartDate": weekago_str,
-            "searchEndDate": today_str
-        }
 
     def _show_result(self, body: dict) -> None:
-        assert type(body) == dict
+        assert isinstance(body, dict)
 
         if body.get("loginYn") != "Y":
             return

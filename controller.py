@@ -55,8 +55,10 @@ def check():
     discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
 
     globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.http_client.session.cookies.clear() 
     globalAuthCtrl.login(username, password)
-    
+
+
     response = check_winning_lotto645(globalAuthCtrl)
     send_message(0, 0, response=response, webhook_url=discord_webhook_url)
 

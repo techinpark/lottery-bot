@@ -14,6 +14,7 @@ from Crypto.Random import get_random_bytes
 from HttpClient import HttpClientSingleton
 
 import auth
+import common
 import re
 
 class Win720:
@@ -27,7 +28,7 @@ class Win720:
     _unpad = lambda self, s : s[:-ord(s[len(s)-1:])]
 
     _REQ_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "User-Agent": auth.USER_AGENT,
         "Connection": "keep-alive",
         "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec-ch-ua-mobile": "?0",
@@ -53,7 +54,7 @@ class Win720:
         auth_ctrl: auth.AuthController,
         username: str
     ) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
+        assert isinstance(auth_ctrl, auth.AuthController)
 
         headers = self._generate_req_headers(auth_ctrl)
         
@@ -99,7 +100,7 @@ class Win720:
         return body
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
+        assert isinstance(auth_ctrl, auth.AuthController)
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
     
     def _getRequirements(self, headers: dict) -> list:
@@ -236,11 +237,11 @@ class Win720:
 
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
-        assert type(auth_ctrl) == auth.AuthController
+        assert isinstance(auth_ctrl, auth.AuthController)
 
         headers = self._generate_req_headers(auth_ctrl)
 
-        parameters = self._make_search_date()
+        parameters = common.get_search_date_range()
         data = {
             "nowPage": 1, 
             "searchStartDate": parameters["searchStartDate"],
@@ -255,43 +256,144 @@ class Win720:
         }
 
         try:
-            res = self.http_client.post(
-                "https://dhlottery.co.kr/myPage.do?method=lottoBuyList",
-                headers=headers,
-                data=data
-            )
-
-            html = res.text
-            soup = BS(html, "html5lib")
-            
-            winnings = soup.find("table", class_="tbl_data tbl_data_col").find_all("tbody")[0].find_all("td")       
-
-            if len(winnings) == 1:
-                return result_data
-
-            result_data = {
-                "round": winnings[2].text.strip(),
-                "money": ",".join([ winnings[6+(i*8)].text.strip() for i in range(0,int(len(winnings)/7))]) ,
-                "purchased_date": winnings[0].text.strip(),
-                "winning_date": winnings[7].text.strip()
+            api_url = "https://www.dhlottery.co.kr/mypage/selectMyLotteryledger.do"
+            params = {
+                "srchStrDt": parameters["searchStartDate"],
+                "srchEndDt": parameters["searchEndDate"],
+                "ltGdsCd": "LP72",
+                "pageNum": 1,
+                "recordCountPerPage": 10
             }
-        except:
-            pass
+            
+            res = self.http_client.get(api_url, params=params, headers=headers)
+            
+            if res.status_code == 200:
+                try:
+                    data = res.json()
+                    data = data.get("data", {})
+                    
+                    if data.get("list"):
+                        item = data["list"][0]
+                        
+                        purchased_date = item.get("eltOrdrDt", "-")
+                        round_no = item.get("ltEpsdView", "")
+                        money = item.get("ltWnAmt", "-")
+                        
+                        if "회" in round_no:
+                            round_no = round_no.replace("회", "")
+                        
+                        if money == "0" or money == 0:
+                             money = "0 원"
+                        else:
+                            money = f"{int(money):,} 원" 
+                            
+                        result_data = {
+                            "round": round_no,
+                            "money": money,
+                            "purchased_date": purchased_date,
+                            "winning_date": item.get("epsdRflDt", "-"),
+                            "win720_details": []
+                        }
+                        
+                        try:
+                            detail_url = "https://www.dhlottery.co.kr/mypage/lottery720select.do"
+                            detail_params = {
+                                "ntslOrdrNo": item.get("ntslOrdrNo")
+                            }
+                            
+                            res_detail = self.http_client.get(detail_url, params=detail_params, headers=headers)
+                            detail_data = res_detail.json()
+                            
+                            detail_data = detail_data.get("data", detail_data)
+                            
+                            win720_details = []
+                            
+                            if "list" in detail_data:
+                                for i, d_item in enumerate(detail_data["list"]):
+                                    label = common.SLOTS[i] if i < len(common.SLOTS) else "?"
+                                    
+                                    info_cn = d_item.get("ltGmInfoCn", "")
+                                    
+                                    rank = d_item.get("wnRnk")
+                                    if rank is None:
+                                        rank = 0
+                                    else:
+                                        try:
+                                            rank = int(rank)
+                                        except:
+                                            rank = 0
+                                            
+                                    status = "0등" if rank == 0 else f"{rank}등"
+                                    
+                                    if ":" in info_cn:
+                                        parts = info_cn.split(":")
+                                        group = parts[0]
+                                        number_str = parts[1]
+                                        
+                                        hl_count = 0 
+                                        hl_group = False
+                                        
+                                        if rank == 1:
+                                            hl_count = 6
+                                            hl_group = True
+                                        elif rank == 2:
+                                            hl_count = 6
+                                        elif rank == 3:
+                                            hl_count = 5
+                                        elif rank == 4:
+                                            hl_count = 4
+                                        elif rank == 5:
+                                            hl_count = 3
+                                        elif rank == 6:
+                                            hl_count = 2
+                                        elif rank == 7:
+                                            hl_count = 1
+                                        
+                                        formatted_chars = []
+                                        digits = list(number_str)
+                                        L = len(digits)
+                                        
+                                        for idx, digit in enumerate(digits):
+                                            if idx >= (L - hl_count):
+                                                formatted_chars.append(f"[{digit}]")
+                                            else:
+                                                formatted_chars.append(f" {digit} ")
+                                        
+                                        formatted_num = " ".join(formatted_chars)
+                                        
+                                        if hl_group:
+                                             label = f"{group}조"
+                                        else:
+                                             label = f"{group}조"
+                                        
+                                        result_str = formatted_num
+                                    else:
+                                        label = "?"
+                                        result_str = info_cn
+                                    
+                                    
+                                    win720_details.append({
+                                        "label": label,
+                                        "result": result_str,
+                                        "status": status
+                                    })
+                                    
+                            result_data["win720_details"] = win720_details
+
+                        except Exception as e:
+                            print(f"[Error] Win720 detail error: {e}")
+                            
+                except Exception as e:
+                     print(f"[Error] Win720 list process error: {e}")
+            
+        except Exception as e:
+            print(f"[Error] Win720 check error: {e}")
 
         return result_data
     
-    def _make_search_date(self) -> dict:
-        today = datetime.datetime.today()
-        today_str = today.strftime("%Y%m%d")
-        weekago = today - timedelta(days=7)
-        weekago_str = weekago.strftime("%Y%m%d")
-        return {
-            "searchStartDate": weekago_str,
-            "searchEndDate": today_str
-        }
 
     def _show_result(self, body: dict) -> None:
-        assert type(body) == dict
+        assert isinstance(body, dict)
 
         if body.get("loginYn") != "Y":
             return

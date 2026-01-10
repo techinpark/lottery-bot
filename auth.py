@@ -8,9 +8,11 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from HttpClient import HttpClientSingleton
 
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 class AuthController:
     _REQ_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "User-Agent": USER_AGENT,
         "Connection": "keep-alive",
         "Cache-Control": "max-age=0",
         "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
@@ -33,27 +35,25 @@ class AuthController:
         self.http_client = HttpClientSingleton.get_instance()
 
     def login(self, user_id: str, password: str):
-        assert type(user_id) == str
-        assert type(password) == str
+        assert isinstance(user_id, str)
+        assert isinstance(password, str)
 
         self.http_client.get("https://dhlottery.co.kr/", headers=self._REQ_HEADERS)
         self.http_client.get("https://dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
+        self.http_client.get("https://www.dhlottery.co.kr/", headers=self._REQ_HEADERS)
+        self.http_client.get("https://www.dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
 
         modulus, exponent = self._get_rsa_key()
 
         enc_user_id = self._rsa_encrypt(user_id, modulus, exponent)
         enc_password = self._rsa_encrypt(password, modulus, exponent)
 
-        headers = {
+        headers = copy.deepcopy(self._REQ_HEADERS)
+        headers.update({
             "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "https://dhlottery.co.kr",
-            "Referer": "https://dhlottery.co.kr/user.do?method=login"
-        }
-        headers.update(self._REQ_HEADERS)
-        
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
-        headers["Origin"] = "https://dhlottery.co.kr"
-        headers["Referer"] = "https://dhlottery.co.kr/user.do?method=login"
+            "Origin": "https://www.dhlottery.co.kr",
+            "Referer": "https://www.dhlottery.co.kr/user.do?method=login"
+        })
         
         data = {
             "userId": enc_user_id,
@@ -64,14 +64,14 @@ class AuthController:
         self._try_login(headers, data)
         
     def add_auth_cred_to_headers(self, headers: dict) -> str:
-        assert type(headers) == dict
+        assert isinstance(headers, dict)
 
         copied_headers = copy.deepcopy(headers)
         return copied_headers
 
     def _get_default_auth_cred(self):
         res = self.http_client.get(
-            "https://dhlottery.co.kr/common.do?method=main"
+            "https://www.dhlottery.co.kr/common.do?method=main"
         )
         return self._get_j_session_id_from_response(res)
 
@@ -80,18 +80,18 @@ class AuthController:
         headers.update({
             "Accept": "application/json",
             "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://dhlottery.co.kr/user.do?method=login"
+            "Referer": "https://www.dhlottery.co.kr/user.do?method=login"
         })
         headers.pop("Upgrade-Insecure-Requests", None)
 
         res = self.http_client.get(
-            "https://dhlottery.co.kr/login/selectRsaModulus.do",
+            "https://www.dhlottery.co.kr/login/selectRsaModulus.do",
             headers=headers
         )
         
         try:
             data = res.json()
-        except:
+        except ValueError:
              raise ValueError(f"Failed to parse JSON. St: {res.status_code}")
         
         if "data" in data and "rsaModulus" in data["data"]:
@@ -111,36 +111,23 @@ class AuthController:
         return binascii.hexlify(ciphertext).decode('utf-8')
 
     def _get_j_session_id_from_response(self, res: requests.Response):
-        assert type(res) == requests.Response
+        assert isinstance(res, requests.Response)
 
         for cookie in res.cookies:
             if cookie.name == "JSESSIONID":
                 return cookie.value
         
-        if self.http_client.session.cookies.get("JSESSIONID"):
-             return self.http_client.session.cookies.get("JSESSIONID")
-             
-        if self.http_client.session.cookies.get("DHJSESSIONID"):
-             return self.http_client.session.cookies.get("DHJSESSIONID")
-
-        if self._AUTH_CRED: 
-            return self._AUTH_CRED
-        
-        if self.http_client.session.cookies.get("WMONID"):
-            return self.http_client.session.cookies.get("WMONID")
-
-        return ""
+        return self.get_current_session_id()
 
     def _generate_req_headers(self, j_session_id: str):
         return copy.deepcopy(self._REQ_HEADERS)
 
     def _try_login(self, headers: dict, data: dict):
-        assert type(headers) == dict
-        assert type(data) == dict
+        assert isinstance(headers, dict)
+        assert isinstance(data, dict)
         
-
         res = self.http_client.post(
-            "https://dhlottery.co.kr/login/securityLoginCheck.do",
+            "https://www.dhlottery.co.kr/login/securityLoginCheck.do",
             headers=headers,
             data=data,
         )
@@ -151,14 +138,27 @@ class AuthController:
 
         try:
              self.http_client.get("https://dhlottery.co.kr/main", headers=self._REQ_HEADERS)
-        except Exception:
-             pass 
+        except Exception as e:
+             print(f"[Warning] Failed to check main page after login: {e}")
              
         return res
 
     def _update_auth_cred(self, j_session_id: str) -> None:
-        assert type(j_session_id) == str
+        assert isinstance(j_session_id, str)
         self._AUTH_CRED = j_session_id
+        
+        self._AUTH_CRED = j_session_id
+        
+        self.http_client.session.cookies.set("JSESSIONID", j_session_id, domain=".dhlottery.co.kr")
+
+        wmonid = None
+        for cookie in self.http_client.session.cookies:
+             if cookie.name == "WMONID":
+                 wmonid = cookie.value
+                 break
+        
+        if wmonid:
+             self.http_client.session.cookies.set("WMONID", wmonid, domain=".dhlottery.co.kr")
 
     def get_current_session_id(self) -> str:
         for cookie in self.http_client.session.cookies:
@@ -171,19 +171,28 @@ class AuthController:
         
         if self._AUTH_CRED:
             return self._AUTH_CRED
+        
+        if self._AUTH_CRED:
+            return self._AUTH_CRED
+        
+        for cookie in self.http_client.session.cookies:
+             if cookie.name == "WMONID":
+                 return cookie.value
+
+        return ""
             
     def get_user_balance(self) -> str:
         try:
              try:
                  self.http_client.get("https://dhlottery.co.kr/mypage/home")
-             except:
+             except requests.RequestException:
                  pass
 
              timestamp = int(datetime.datetime.now().timestamp() * 1000)
              url = f"https://dhlottery.co.kr/mypage/selectUserMndp.do?_={timestamp}"
              
-             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+             headers = copy.deepcopy(self._REQ_HEADERS)
+             headers.update({
                 "Referer": "https://dhlottery.co.kr/mypage/home",
                 "X-Requested-With": "XMLHttpRequest",
                 "Content-Type": "application/json;charset=UTF-8",
@@ -193,7 +202,7 @@ class AuthController:
                 "Sec-Fetch-Mode": "cors",
                 "Sec-Fetch-Site": "same-origin",
                 "Sec-Fetch-Dest": "empty"
-             }
+             })
              
              res = self.http_client.get(url, headers=headers)
              
