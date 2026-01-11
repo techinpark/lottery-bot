@@ -11,7 +11,7 @@ class HttpClient:
         session_headers = self.session.headers.copy()
         if headers:
             session_headers.update(headers)
-        res = self.session.post(url, headers=session_headers, data=data, timeout=10, allow_redirects=True)
+        res = self.session.post(url, headers=session_headers, data=data, timeout=30, allow_redirects=True)
         res.raise_for_status()
         return res
 
@@ -19,7 +19,7 @@ class HttpClient:
         session_headers = self.session.headers.copy()
         if headers:
             session_headers.update(headers)
-        res = self.session.get(url, headers=session_headers, params=params, timeout=10)
+        res = self.session.get(url, headers=session_headers, params=params, timeout=30)
         res.raise_for_status()
         return res
 
