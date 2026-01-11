@@ -9,7 +9,10 @@ from bs4 import BeautifulSoup as BS
 
 import auth
 import common
+import logging
 from HttpClient import HttpClientSingleton
+
+logger = logging.getLogger(__name__)
 
 class Lotto645Mode(Enum):
     AUTO = 1
@@ -132,7 +135,8 @@ class Lotto645:
                 tlmt_date = tlmt_date_el.get('value')
             else:
                 raise ValueError("Date inputs not found")
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.error(f"[Error] Date extraction failed: {e}")
             today = datetime.datetime.today()
             days_ahead = (5 - today.weekday()) % 7
             next_saturday = today + datetime.timedelta(days=days_ahead)
@@ -240,8 +244,8 @@ class Lotto645:
                 data = data.get("data", {})
                 if "list" not in data:
                     print("DEBUG_DATA_LIST_MISSING_IN_DATA")
-            except Exception as e:
-                print(f"[Error] API JSON Parse Failed: {e}")
+            except (json.JSONDecodeError, AttributeError, KeyError) as e:
+                logger.error(f"[Error] API JSON Parse Failed: {e}")
                 data = {}
 
             if not data.get("list"):
@@ -314,14 +318,17 @@ class Lotto645:
                     
                     result_data["lotto_details"] = lotto_details
 
-                except Exception as e:
-                    print(f"[Error] Detail parse error: {e}")
+                except (requests.RequestException, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+                    logger.error(f"[Error] Detail parse error (url={detail_url}, params={detail_params}): {e}")
                 
                 break
  
                             
+        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+            logger.error(f"[Error] Lotto check error: {e}")
         except Exception as e:
-            print(f"[Error] Lotto check error: {e}")
+            logger.error(f"[Error] Unexpected Lotto check error: {e}")
+            raise
 
         return result_data
     
