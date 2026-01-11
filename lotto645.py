@@ -1,5 +1,6 @@
 import datetime
 import json
+import requests
 
 from datetime import timedelta
 from enum import Enum
@@ -213,8 +214,8 @@ class Lotto645:
 
         try:
             self.http_client.get("https://www.dhlottery.co.kr/common.do?method=main", headers=headers)
-        except:
-            pass
+        except requests.RequestException as e:
+            print(f"[Warning] Warm-up request failed: {e}")
 
         result_data = {
             "data": "no winning data"
@@ -233,7 +234,6 @@ class Lotto645:
             res = self.http_client.get(api_url, params=params, headers=headers)
             
             if res.status_code != 200:
-                print(f"DEBUG: API Status {res.status_code}")
                 print(f"DEBUG: API Status {res.status_code}")
                 pass
             
@@ -284,8 +284,6 @@ class Lotto645:
                 try:
                     res_detail = self.http_client.get(detail_url, params=detail_params, headers=headers)
                     detail_data = res_detail.json()
-                    res_detail = self.http_client.get(detail_url, params=detail_params, headers=headers)
-                    detail_data = res_detail.json()
                     detail_data = detail_data.get("data", detail_data)
                     
                     ticket = detail_data.get("ticket", {})
@@ -293,14 +291,11 @@ class Lotto645:
                          ticket = detail_data["data"].get("ticket", {})
                          
                     game_dtl = ticket.get("game_dtl", [])
-                    game_dtl = ticket.get("game_dtl", [])
                     win_num = ticket.get("win_num", [])
                     
                     lotto_details = []
                     
                     for i, game in enumerate(game_dtl):
-                        label = common.SLOTS[i] if i < len(common.SLOTS) else "?"
-                        
                         label = common.SLOTS[i] if i < len(common.SLOTS) else "?"
                         
                         rank = game.get("rank", "0")

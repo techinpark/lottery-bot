@@ -119,7 +119,7 @@ class AuthController:
         
         return self.get_current_session_id()
 
-    def _generate_req_headers(self, j_session_id: str):
+    def _generate_req_headers(self):
         return copy.deepcopy(self._REQ_HEADERS)
 
     def _try_login(self, headers: dict, data: dict):
@@ -147,8 +147,6 @@ class AuthController:
         assert isinstance(j_session_id, str)
         self._AUTH_CRED = j_session_id
         
-        self._AUTH_CRED = j_session_id
-        
         self.http_client.session.cookies.set("JSESSIONID", j_session_id, domain=".dhlottery.co.kr")
 
         wmonid = None
@@ -162,22 +160,11 @@ class AuthController:
 
     def get_current_session_id(self) -> str:
         for cookie in self.http_client.session.cookies:
-            if cookie.name == "JSESSIONID":
+            if cookie.name in ["JSESSIONID", "DHJSESSIONID", "WMONID"]:
                 return cookie.value
         
-        for cookie in self.http_client.session.cookies:
-             if cookie.name == "DHJSESSIONID":
-                 return cookie.value
-        
         if self._AUTH_CRED:
             return self._AUTH_CRED
-        
-        if self._AUTH_CRED:
-            return self._AUTH_CRED
-        
-        for cookie in self.http_client.session.cookies:
-             if cookie.name == "WMONID":
-                 return cookie.value
 
         return ""
             

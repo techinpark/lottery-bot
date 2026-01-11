@@ -40,7 +40,7 @@ class Notification:
         if win720_round == "?":
             try:
                  win720_round = body.get("saleTicket", "").split("|")[-2]
-            except:
+            except (IndexError, AttributeError, TypeError):
                  win720_round = "?"
 
         if not body.get("saleTicket"):

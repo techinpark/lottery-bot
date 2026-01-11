@@ -58,7 +58,6 @@ class Win720:
 
         headers = self._generate_req_headers(auth_ctrl)
         
-        requirements = self._getRequirements(headers)
 
         jsessionid = auth_ctrl.get_current_session_id()
         
@@ -71,13 +70,7 @@ class Win720:
             q_val = json.loads(makeAutoNum_ret)['q']
         except json.JSONDecodeError:
             raise ValueError(f"Failed to parse makeAutoNum response: {makeAutoNum_ret[:100]}...")
-        except Exception as e:
-            raise e
-            
-        try:
-            decrypted = self._decText(q_val)
-        except Exception as e:
-            raise e
+        decrypted = self._decText(q_val)
         
         if "resultMsg" in decrypted and ":" in decrypted:
              decrypted = re.sub(r'("resultMsg":\s*)([^",}]*)([,}])', r'\1"\2"\3', decrypted)
@@ -103,23 +96,6 @@ class Win720:
         assert isinstance(auth_ctrl, auth.AuthController)
         return auth_ctrl.add_auth_cred_to_headers(self._REQ_HEADERS)
     
-    def _getRequirements(self, headers: dict) -> list:
-        org_headers = headers.copy()
-        
-        headers["Referer"] = "https://el.dhlottery.co.kr/game/pension720/game.jsp"
-        headers["Content-Type"] = "application/json" 
-        headers["X-Requested-With"] = "XMLHttpRequest"
-
-        try:
-             res = self.http_client.post(
-                url="https://el.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
-                headers=headers
-            )
-             direct = json.loads(res.text)["ready_ip"]
-        except:
-             pass
-        
-        return []
 
     def _get_round(self) -> str:
         try:
