@@ -94,7 +94,6 @@ class Lotto645:
         raise NotImplementedError()
 
     def _getRequirements(self, headers: dict) -> list:
-        org_headers = headers.copy()
         headers["Referer"] = "https://ol.dhlottery.co.kr/olotto/game/game645.do"
         headers["Origin"] = "https://ol.dhlottery.co.kr"
         headers["X-Requested-With"] = "XMLHttpRequest"
@@ -253,7 +252,6 @@ class Lotto645:
                 purchased_date = item.get("eltOrdrDt", "-")
                 round_no = item.get("ltEpsdView", "")
                 money = item.get("ltWnAmt", "-")
-                win_result = item.get("ltWnResult", "")
                 
                 if "회" in round_no:
                     round_no = round_no.replace("회", "")

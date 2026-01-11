@@ -56,9 +56,6 @@ class Win720:
     ) -> dict:
         assert isinstance(auth_ctrl, auth.AuthController)
 
-        headers = self._generate_req_headers(auth_ctrl)
-        
-
         jsessionid = auth_ctrl.get_current_session_id()
         
         self.keyCode = jsessionid
@@ -110,7 +107,7 @@ class Win720:
                 return str(int(found.text) - 1)
             else:
                 raise ValueError("drwNo720 not found")
-        except:
+        except (requests.RequestException, AttributeError, ValueError):
              base_date = datetime.datetime(2024, 12, 26)
              base_round = 244
              
@@ -296,7 +293,7 @@ class Win720:
                                     else:
                                         try:
                                             rank = int(rank)
-                                        except:
+                                        except (ValueError, TypeError):
                                             rank = 0
                                             
                                     status = "0등" if rank == 0 else f"{rank}등"
