@@ -100,7 +100,6 @@ class Lotto645:
         headers["Sec-Fetch-Site"] = "same-origin"
         headers["Sec-Fetch-Mode"] = "cors"
         headers["Sec-Fetch-Dest"] = "empty"
-        headers["X-Requested-With"] ="XMLHttpRequest"
 
         res = self.http_client.post(
             url="https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
@@ -145,9 +144,9 @@ class Lotto645:
         
         cur_round_input = soup.find("input", id="curRound")
         if cur_round_input:
-             current_round = cur_round_input.get('value')
+            current_round = cur_round_input.get('value')
         else:
-             current_round = self._get_round()
+            current_round = self._get_round()
 
         return [direct, draw_date, tlmt_date, current_round]
 

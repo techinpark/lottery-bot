@@ -16,6 +16,9 @@ from HttpClient import HttpClientSingleton
 import auth
 import common
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Win720:
 
@@ -153,8 +156,8 @@ class Win720:
         try:
             ret = json.loads(self._decText(json.loads(res.text)['q']))
             return ret['orderNo'], ret['orderDate']
-        except ValueError:
-             raise ValueError(f"Failed to parse doOrderRequest/decText: {res.text[:100]}...")
+        except (json.JSONDecodeError, KeyError) as err:
+             raise ValueError(f"Failed to parse doOrderRequest/decText: {res.text[:100]}...") from err
 
     def _doConnPro(self, auth_ctrl: auth.AuthController, win720_round: str, extracted_num: str, username: str, orderNo: str, orderDate: str) -> str:
         payload = "ROUND={}&FLAG=&BUY_KIND=01&BUY_NO={}&BUY_CNT=5&BUY_SET_TYPE=SA%2CSA%2CSA%2CSA%2CSA&BUY_TYPE=A%2CA%2CA%2CA%2CA%2C&CS_TYPE=01&orderNo={}&orderDate={}&TRANSACTION_ID=&WIN_DATE=&USER_ID={}&PAY_TYPE=&resultErrorCode=&resultErrorMsg=&resultOrderNo=&WORKING_FLAG=true&NUM_CHANGE_TYPE=&auto_process=N&set_type=SA&classnum=&selnum=&buytype=M&num1=&num2=&num3=&num4=&num5=&num6=&DSEC=34&CLOSE_DATE=&verifyYN=N&curdeposit=&curpay=5000&DROUND={}&DSEC=0&CLOSE_DATE=&verifyYN=N&lotto720_radio_group=on".format(win720_round,"".join([ "{}{}%2C".format(i,extracted_num) for i in range(1,6)])[:-3],orderNo, orderDate, username, win720_round)
@@ -172,9 +175,10 @@ class Win720:
 
         try:
             ret = self._decText(json.loads(res.text)['q'])
+        except (json.JSONDecodeError, KeyError) as err:
+             raise ValueError(f"Failed to parse doConnPro: {res.text[:100]}...") from err
+        else:
             return ret
-        except ValueError:
-             raise ValueError(f"Failed to parse doConnPro: {res.text[:100]}...")
 
     def _encText(self, plainText: str) -> str:
         encSalt = get_random_bytes(32)
@@ -334,10 +338,7 @@ class Win720:
                                         
                                         formatted_num = " ".join(formatted_chars)
                                         
-                                        if hl_group:
-                                             label = f"{group}조"
-                                        else:
-                                             label = f"{group}조"
+                                        label = f"{group}조"
                                         
                                         result_str = formatted_num
                                     else:
@@ -354,13 +355,13 @@ class Win720:
                             result_data["win720_details"] = win720_details
 
                         except Exception as e:
-                            print(f"[Error] Win720 detail error: {e}")
+                            logger.error(f"[Error] Win720 detail error: {e}")
                             
                 except Exception as e:
-                     print(f"[Error] Win720 list process error: {e}")
+                     logger.error(f"[Error] Win720 list process error: {e}")
             
         except Exception as e:
-            print(f"[Error] Win720 check error: {e}")
+            logger.error(f"[Error] Win720 check error: {e}")
 
         return result_data
     
