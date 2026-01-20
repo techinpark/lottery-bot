@@ -94,14 +94,16 @@ class Notification:
 
             is_winning = winning['money'] != "-" and winning['money'] != "0 원" and winning['money'] != "0"
             
+            balance_str = winning.get('balance', '확인불가')
             if is_winning:
-                winning_message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉"
+                winning_message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉 (남은잔액 : {balance_str})"
             else:
-                winning_message = f"로또 *{winning['round']}회* - 다음 기회에... 🫠"
+                winning_message = f"로또 *{winning['round']}회* - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
 
             self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
         except KeyError:
-            message = "로또 - 다음 기회에... 🫠"
+            balance_str = winning.get('balance', '확인불가')
+            message = f"로또 - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
             self._send_discord_webhook(webhook_url, message)
             return
 
@@ -124,14 +126,16 @@ class Notification:
 
             is_winning = winning['money'] != "-" and winning['money'] != "0 원" and winning['money'] != "0"
 
+            balance_str = winning.get('balance', '확인불가')
             if is_winning:
-                message = f"{message_content}연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉"
+                message = f"{message_content}연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉 (남은잔액 : {balance_str})"
             else:
-                 message = f"{message_content}연금복권 *{winning['round']}회* - 다음 기회에... 🫠"
+                 message = f"{message_content}연금복권 *{winning['round']}회* - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
 
             self._send_discord_webhook(webhook_url, message)
         except KeyError:
-            message = "연금복권 - 다음 기회에... 🫠"
+            balance_str = winning.get('balance', '확인불가')
+            message = f"연금복권 - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
             self._send_discord_webhook(webhook_url, message)
 
     def _send_discord_webhook(self, webhook_url: str, message: str) -> None:        

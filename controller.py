@@ -19,6 +19,7 @@ def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
 def check_winning_lotto645(authCtrl: auth.AuthController) -> dict:
     lotto = lotto645.Lotto645()
     item = lotto.check_winning(authCtrl)
+    item['balance'] = authCtrl.get_user_balance()
     return item
 
 def buy_win720(authCtrl: auth.AuthController, username: str):
@@ -30,6 +31,7 @@ def buy_win720(authCtrl: auth.AuthController, username: str):
 def check_winning_win720(authCtrl: auth.AuthController) -> dict:
     pension = win720.Win720()
     item = pension.check_winning(authCtrl)
+    item['balance'] = authCtrl.get_user_balance()
     return item
 
 def send_message(mode: int, lottery_type: int, response: dict, webhook_url: str):
@@ -91,6 +93,56 @@ def buy():
     response = buy_win720(globalAuthCtrl, username) 
     send_message(1, 1, response=response, webhook_url=discord_webhook_url)
 
+def lotto_buy():
+    load_dotenv(override=True)
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    count = int(os.environ.get('COUNT'))
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+    mode = "AUTO"
+
+    globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.login(username, password)
+    
+    response = buy_lotto645(globalAuthCtrl, count, mode)
+    send_message(1, 0, response=response, webhook_url=discord_webhook_url)
+
+def win720_buy():
+    load_dotenv(override=True)
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+
+    globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.login(username, password)
+
+    response = buy_win720(globalAuthCtrl, username)
+    send_message(1, 1, response=response, webhook_url=discord_webhook_url)
+
+def lotto_check():
+    load_dotenv(override=True)
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+
+    globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.login(username, password)
+
+    response = check_winning_lotto645(globalAuthCtrl)
+    send_message(0, 0, response=response, webhook_url=discord_webhook_url)
+
+def win720_check():
+    load_dotenv(override=True)
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+
+    globalAuthCtrl = auth.AuthController()
+    globalAuthCtrl.login(username, password)
+
+    response = check_winning_win720(globalAuthCtrl)
+    send_message(0, 1, response=response, webhook_url=discord_webhook_url)
+
 def run():
     if len(sys.argv) < 2:
         print("Usage: python controller.py [buy|check]")
@@ -100,6 +152,14 @@ def run():
         buy()
     elif sys.argv[1] == "check":
         check()
+    elif sys.argv[1] == "buy_lotto":
+        lotto_buy()
+    elif sys.argv[1] == "buy_win720":
+        win720_buy()
+    elif sys.argv[1] == "check_lotto":
+        lotto_check()
+    elif sys.argv[1] == "check_win720":
+        win720_check()
   
 
 if __name__ == "__main__":

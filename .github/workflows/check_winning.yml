@@ -18,7 +18,7 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Run Scripts
-        run: make check
+        run: make check # or use 'make check_lotto' / 'make check_win720' for granular check
         env:
           USERNAME: ${{ secrets.USERNAME }}
           PASSWORD: ${{ secrets.PASSWORD }}

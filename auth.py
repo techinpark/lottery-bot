@@ -4,6 +4,7 @@ import requests
 import json
 import base64
 import binascii
+import time
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from HttpClient import HttpClientSingleton
@@ -18,10 +19,10 @@ class AuthController:
         "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec-ch-ua-mobile": "?0",
         "Upgrade-Insecure-Requests": "1",
-        "Origin": "https://dhlottery.co.kr",
+        "Origin": "https://www.dhlottery.co.kr",
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-        "Referer": "https://dhlottery.co.kr/",
+        "Referer": "https://www.dhlottery.co.kr/",
         "Sec-Fetch-Site": "same-site",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-User": "?1",
@@ -38,30 +39,44 @@ class AuthController:
         assert isinstance(user_id, str)
         assert isinstance(password, str)
 
-        self.http_client.get("https://dhlottery.co.kr/", headers=self._REQ_HEADERS)
-        self.http_client.get("https://dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
-        self.http_client.get("https://www.dhlottery.co.kr/", headers=self._REQ_HEADERS)
-        self.http_client.get("https://www.dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                # 1. Warm-up
+                self.http_client.get("https://www.dhlottery.co.kr/")
+                self.http_client.get("https://www.dhlottery.co.kr/user.do?method=login", headers=self._REQ_HEADERS)
+                
+                # 2. RSA Key Fetch
+                modulus, exponent = self._get_rsa_key()
 
-        modulus, exponent = self._get_rsa_key()
+                # 3. Encrypt
+                enc_user_id = self._rsa_encrypt(user_id, modulus, exponent)
+                enc_password = self._rsa_encrypt(password, modulus, exponent)
 
-        enc_user_id = self._rsa_encrypt(user_id, modulus, exponent)
-        enc_password = self._rsa_encrypt(password, modulus, exponent)
+                # 4. Prepare Login Request
+                headers = copy.deepcopy(self._REQ_HEADERS)
+                headers.update({
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": "https://www.dhlottery.co.kr",
+                    "Referer": "https://www.dhlottery.co.kr/user.do?method=login"
+                })
+                
+                data = {
+                    "userId": enc_user_id,
+                    "userPswdEncn": enc_password, 
+                    "inpUserId": user_id
+                }
 
-        headers = copy.deepcopy(self._REQ_HEADERS)
-        headers.update({
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "https://www.dhlottery.co.kr",
-            "Referer": "https://www.dhlottery.co.kr/user.do?method=login"
-        })
-        
-        data = {
-            "userId": enc_user_id,
-            "userPswdEncn": enc_password, 
-            "inpUserId": user_id
-        }
-
-        self._try_login(headers, data)
+                # 5. Execute Login
+                self._try_login(headers, data)
+                return # Success
+                
+            except requests.RequestException as e:
+                time.sleep(2)
+                if attempt == max_retries - 1:
+                     print(f"[Error] Login sequence failed after {max_retries} attempts: {e}")
+                     raise
+                print(f"[Retry] Login failed ({attempt+1}/{max_retries}): {e}. Retrying...")
         
     def add_auth_cred_to_headers(self, headers: dict) -> str:
         assert isinstance(headers, dict)
@@ -137,7 +152,7 @@ class AuthController:
              self._update_auth_cred(new_jsessionid)
 
         try:
-             self.http_client.get("https://dhlottery.co.kr/main", headers=self._REQ_HEADERS)
+             self.http_client.get("https://www.dhlottery.co.kr/main", headers=self._REQ_HEADERS)
         except Exception as e:
              print(f"[Warning] Failed to check main page after login: {e}")
              
@@ -169,47 +184,54 @@ class AuthController:
         return ""
             
     def get_user_balance(self) -> str:
-        try:
-             try:
-                 self.http_client.get("https://dhlottery.co.kr/mypage/home")
-             except requests.RequestException:
-                 pass
+        last_error = None
+        
+        for attempt in range(3):
+            try:
+                 try:
+                     self.http_client.get("https://www.dhlottery.co.kr/mypage/home")
+                 except requests.RequestException:
+                     pass
 
-             timestamp = int(datetime.datetime.now().timestamp() * 1000)
-             url = f"https://dhlottery.co.kr/mypage/selectUserMndp.do?_={timestamp}"
-             
-             headers = copy.deepcopy(self._REQ_HEADERS)
-             headers.update({
-                "Referer": "https://dhlottery.co.kr/mypage/home",
-                "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/json;charset=UTF-8",
-                "Accept": "application/json, text/javascript, */*; q=0.01",
-                "requestMenuUri": "/mypage/home",
-                "AJAX": "true",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin",
-                "Sec-Fetch-Dest": "empty"
-             })
-             
-             res = self.http_client.get(url, headers=headers)
-             
-             txt = res.text.strip()
-             if txt.startswith("<"):
-                  return "확인 불가 (로그인/설정)"
-
-             data = json.loads(txt)
-             
-             if 'data' in data and isinstance(data['data'], dict):
-                 data = data['data']
-
-             if 'userMndp' in data:
-                 data = data['userMndp']
+                 timestamp = int(datetime.datetime.now().timestamp() * 1000)
+                 url = f"https://www.dhlottery.co.kr/mypage/selectUserMndp.do?_={timestamp}"
                  
-             if 'totalAmt' in data:
-                 val = str(data['totalAmt']).replace(',', '')
-                 return f"{int(val):,}원"
-             
-             return "0원"
+                 headers = copy.deepcopy(self._REQ_HEADERS)
+                 headers.update({
+                    "Referer": "https://www.dhlottery.co.kr/mypage/home",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                    "requestMenuUri": "/mypage/home",
+                    "AJAX": "true",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Dest": "empty"
+                 })
+                 
+                 res = self.http_client.get(url, headers=headers)
+                 
+                 txt = res.text.strip()
+                 if txt.startswith("<"):
+                      return "확인 불가 (로그인/설정)"
 
-        except Exception as e:
-             return f"0 (System Error: {str(e)})"
+                 data = json.loads(txt)
+                 
+                 if 'data' in data and isinstance(data['data'], dict):
+                     data = data['data']
+
+                 if 'userMndp' in data:
+                     data = data['userMndp']
+                     
+                 if 'totalAmt' in data:
+                     val = str(data['totalAmt']).replace(',', '')
+                     return f"{int(val):,}원"
+                 
+                 return "0원"
+
+            except Exception as e:
+                 last_error = e
+                 time.sleep(1)
+        
+        # If all retries failed
+        return f"정보 로드 실패 (로그 확인)"
