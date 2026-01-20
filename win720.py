@@ -16,7 +16,7 @@ from HttpClient import HttpClientSingleton
 import auth
 import common
 import re
-import re
+
 import logging
 import time
 

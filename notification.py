@@ -62,6 +62,7 @@ class Notification:
         assert type(winning) == dict
         assert type(webhook_url) == str
 
+        balance_str = winning.get('balance', '확인불가')
         try: 
             round = winning["round"]
             money = winning["money"]
@@ -94,7 +95,6 @@ class Notification:
 
             is_winning = winning['money'] != "-" and winning['money'] != "0 원" and winning['money'] != "0"
             
-            balance_str = winning.get('balance', '확인불가')
             if is_winning:
                 winning_message = f"로또 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉 (남은잔액 : {balance_str})"
             else:
@@ -102,7 +102,6 @@ class Notification:
 
             self._send_discord_webhook(webhook_url, f"```ini\n{formatted_results}```\n{winning_message}")
         except KeyError:
-            balance_str = winning.get('balance', '확인불가')
             message = f"로또 - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
             self._send_discord_webhook(webhook_url, message)
             return
@@ -111,6 +110,7 @@ class Notification:
         assert type(winning) == dict
         assert type(webhook_url) == str
 
+        balance_str = winning.get('balance', '확인불가')
         try:
             if "win720_details" in winning and winning["win720_details"]:
                 max_label_status_length = max(len(f"{line['label']} {line['status']}") for line in winning["win720_details"])
@@ -126,7 +126,6 @@ class Notification:
 
             is_winning = winning['money'] != "-" and winning['money'] != "0 원" and winning['money'] != "0"
 
-            balance_str = winning.get('balance', '확인불가')
             if is_winning:
                 message = f"{message_content}연금복권 *{winning['round']}회* - *{winning['money']}* 당첨 되었습니다 🎉 (남은잔액 : {balance_str})"
             else:
@@ -134,10 +133,13 @@ class Notification:
 
             self._send_discord_webhook(webhook_url, message)
         except KeyError:
-            balance_str = winning.get('balance', '확인불가')
             message = f"연금복권 - 다음 기회에... 🫠 (남은잔액 : {balance_str})"
             self._send_discord_webhook(webhook_url, message)
 
     def _send_discord_webhook(self, webhook_url: str, message: str) -> None:        
+        if not webhook_url:
+            print(f"[Info] Webhook URL not found. Message: {message}")
+            return
+        
         payload = { "content": message }
         requests.post(webhook_url, json=payload)

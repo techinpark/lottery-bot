@@ -234,4 +234,5 @@ class AuthController:
                  time.sleep(1)
         
         # If all retries failed
+        print(f"[Error] 잔액 조회에 실패했습니다: {last_error}")
         return f"정보 로드 실패 (로그 확인)"
