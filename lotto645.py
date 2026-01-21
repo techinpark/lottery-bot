@@ -1,6 +1,7 @@
 import datetime
 import json
 import requests
+import time
 
 from datetime import timedelta
 from enum import Enum
@@ -104,17 +105,30 @@ class Lotto645:
         headers["Sec-Fetch-Mode"] = "cors"
         headers["Sec-Fetch-Dest"] = "empty"
 
-        res = self.http_client.post(
-            url="https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
-            headers=headers
-        )
+        # Retry logic for egovUserReadySocket.json
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = self.http_client.post(
+                    url="https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json", 
+                    headers=headers
+                )
+                res.raise_for_status() # Check for HTTP errors
+                break # Success
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[Retry] ReadySocket connection failed ({attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    logger.error(f"[Error] ReadySocket connection failed after {max_retries} attempts: {e}")
+                    raise
         
         direct = json.loads(res.text)["ready_ip"]
         
         html_headers = self._REQ_HEADERS.copy()
         html_headers.pop("Origin", None)
         html_headers.pop("Content-Type", None)
-        html_headers["Referer"] = "https://dhlottery.co.kr/common.do?method=main"
+        html_headers["Referer"] = "https://www.dhlottery.co.kr/common.do?method=main"
         
         if headers.get("Cookie"):
             html_headers["Cookie"] = headers.get("Cookie")
@@ -157,7 +171,7 @@ class Lotto645:
     def _get_round(self) -> str:
         try:
             res = self.http_client.get(
-                "https://dhlottery.co.kr/common.do?method=main",
+                "https://www.dhlottery.co.kr/common.do?method=main",
                 headers=self._REQ_HEADERS
             )
             html = res.text
@@ -190,11 +204,23 @@ class Lotto645:
 
         headers["Content-Type"]  = "application/x-www-form-urlencoded; charset=UTF-8"
 
-        res = self.http_client.post(
-            "https://ol.dhlottery.co.kr/olotto/game/execBuy.do",
-            headers=headers,
-            data=data,
-        )
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = self.http_client.post(
+                    "https://ol.dhlottery.co.kr/olotto/game/execBuy.do",
+                    headers=headers,
+                    data=data,
+                )
+                res.raise_for_status()
+                break
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[Retry] execBuy connection failed ({attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    logger.error(f"[Error] execBuy connection failed after {max_retries} attempts: {e}")
+                    raise
         if res.encoding == 'ISO-8859-1':
              res.encoding = 'euc-kr'
         
@@ -254,15 +280,18 @@ class Lotto645:
             for item in data["list"]:
                 purchased_date = item.get("eltOrdrDt", "-")
                 round_no = item.get("ltEpsdView", "")
-                money = item.get("ltWnAmt", "-")
-                
                 if "회" in round_no:
                     round_no = round_no.replace("회", "")
-                
-                if money == "0" or money == 0:
-                     money = "0 원"
-                else:
-                    money = f"{int(money):,} 원"
+
+                money_raw = item.get("ltWnAmt", "0")
+                if money_raw is None:
+                    money_raw = "0"
+
+                try:
+                    val = int(money_raw)
+                    money = f"{val:,} 원"
+                except (ValueError, TypeError):
+                    money = "0 원"
 
                 result_data = {
                     "round": round_no,

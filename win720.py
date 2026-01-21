@@ -16,7 +16,9 @@ from HttpClient import HttpClientSingleton
 import auth
 import common
 import re
+
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,7 @@ class Win720:
     def _get_round(self) -> str:
         try:
             res = self.http_client.get(
-                "https://dhlottery.co.kr/common.do?method=main",
+                "https://www.dhlottery.co.kr/common.do?method=main",
                 headers=self._REQ_HEADERS
             )
             html = res.text
@@ -131,11 +133,23 @@ class Win720:
             "q": requests.utils.quote(self._encText(payload))
         }
 
-        res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/makeAutoNo.do", 
-            headers=headers,
-            data=data
-        )
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = self.http_client.post(
+                    url="https://el.dhlottery.co.kr/makeAutoNo.do", 
+                    headers=headers,
+                    data=data
+                )
+                res.raise_for_status()
+                break
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[Retry] makeAutoNo connection failed ({attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    logger.error(f"[Error] makeAutoNo connection failed after {max_retries} attempts: {e}")
+                    raise
 
         return res.text
 
@@ -147,11 +161,23 @@ class Win720:
             "q": requests.utils.quote(self._encText(payload))
         }
 
-        res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/makeOrderNo.do", 
-            headers=headers,
-            data=data
-        )
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = self.http_client.post(
+                    url="https://el.dhlottery.co.kr/makeOrderNo.do", 
+                    headers=headers,
+                    data=data
+                )
+                res.raise_for_status()
+                break
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[Retry] makeOrderNo connection failed ({attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    logger.error(f"[Error] makeOrderNo connection failed after {max_retries} attempts: {e}")
+                    raise
 
         try:
             ret = json.loads(self._decText(json.loads(res.text)['q']))
@@ -167,11 +193,23 @@ class Win720:
             "q": requests.utils.quote(self._encText(payload))
         }
         
-        res = self.http_client.post(
-            url="https://el.dhlottery.co.kr/connPro.do", 
-            headers=headers,
-            data=data
-        )
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = self.http_client.post(
+                    url="https://el.dhlottery.co.kr/connPro.do", 
+                    headers=headers,
+                    data=data
+                )
+                res.raise_for_status()
+                break
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[Retry] connPro connection failed ({attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    logger.error(f"[Error] connPro connection failed after {max_retries} attempts: {e}")
+                    raise
 
         try:
             ret = self._decText(json.loads(res.text)['q'])
@@ -254,15 +292,18 @@ class Win720:
                         
                         purchased_date = item.get("eltOrdrDt", "-")
                         round_no = item.get("ltEpsdView", "")
-                        money = item.get("ltWnAmt", "-")
+                        money_raw = item.get("ltWnAmt", "0")
+                        if money_raw is None:
+                            money_raw = "0"
                         
                         if "회" in round_no:
                             round_no = round_no.replace("회", "")
                         
-                        if money == "0" or money == 0:
-                             money = "0 원"
-                        else:
-                            money = f"{int(money):,} 원" 
+                        try:
+                            val = int(money_raw)
+                            money = f"{val:,} 원"
+                        except (ValueError, TypeError):
+                            money = "0 원"
                             
                         result_data = {
                             "round": round_no,

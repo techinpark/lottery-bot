@@ -9,6 +9,32 @@ import notification
 import time
 
 
+def _setup_and_login():
+    load_dotenv(override=True)
+    username = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
+    if slack_webhook_url and slack_webhook_url.startswith("YOUR_"):
+        slack_webhook_url = None
+
+    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+    if discord_webhook_url and discord_webhook_url.startswith("YOUR_"):
+        discord_webhook_url = None
+
+    telegram_bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    if telegram_bot_token and telegram_bot_token.startswith("YOUR_"):
+        telegram_bot_token = None
+
+    if slack_webhook_url:
+        webhook_url = slack_webhook_url
+    else:
+        webhook_url = discord_webhook_url
+
+    auth_ctrl = auth.AuthController()
+    auth_ctrl.login(username, password)
+
+    return auth_ctrl, username, webhook_url
+
 def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
     lotto = lotto645.Lotto645()
     _mode = lotto645.Lotto645Mode[mode.upper()]
@@ -19,6 +45,7 @@ def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
 def check_winning_lotto645(authCtrl: auth.AuthController) -> dict:
     lotto = lotto645.Lotto645()
     item = lotto.check_winning(authCtrl)
+    item['balance'] = authCtrl.get_user_balance()
     return item
 
 def buy_win720(authCtrl: auth.AuthController, username: str):
@@ -30,6 +57,7 @@ def buy_win720(authCtrl: auth.AuthController, username: str):
 def check_winning_win720(authCtrl: auth.AuthController) -> dict:
     pension = win720.Win720()
     item = pension.check_winning(authCtrl)
+    item['balance'] = authCtrl.get_user_balance()
     return item
 
 def send_message(mode: int, lottery_type: int, response: dict, webhook_url: str):
@@ -47,49 +75,60 @@ def send_message(mode: int, lottery_type: int, response: dict, webhook_url: str)
             notify.send_win720_buying_message(response, webhook_url)
 
 def check():
-    load_dotenv(override=True)
+    auth_ctrl, _, webhook_url = _setup_and_login()
 
-    username = os.environ.get('USERNAME')
-    password = os.environ.get('PASSWORD')
-    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
-    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
-
-    globalAuthCtrl = auth.AuthController()
-    globalAuthCtrl.login(username, password)
-
-
-    response = check_winning_lotto645(globalAuthCtrl)
-    send_message(0, 0, response=response, webhook_url=discord_webhook_url)
+    response = check_winning_lotto645(auth_ctrl)
+    send_message(0, 0, response=response, webhook_url=webhook_url)
 
     time.sleep(10)
     
-    response = check_winning_win720(globalAuthCtrl)
-    send_message(0, 1, response=response, webhook_url=discord_webhook_url)
+    response = check_winning_win720(auth_ctrl)
+    send_message(0, 1, response=response, webhook_url=webhook_url)
 
 def buy(): 
-    
     load_dotenv(override=True) 
-
-    username = os.environ.get('USERNAME')
-    password = os.environ.get('PASSWORD')
     count = int(os.environ.get('COUNT'))
-    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
-    discord_webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
     mode = "AUTO"
 
-    globalAuthCtrl = auth.AuthController()
-    globalAuthCtrl.login(username, password)
+    auth_ctrl, username, webhook_url = _setup_and_login()
 
-    response = buy_lotto645(globalAuthCtrl, count, mode) 
-    send_message(1, 0, response=response, webhook_url=discord_webhook_url)
+    response = buy_lotto645(auth_ctrl, count, mode) 
+    send_message(1, 0, response=response, webhook_url=webhook_url)
 
     time.sleep(10)
 
-    globalAuthCtrl.http_client.session.cookies.clear()
-    globalAuthCtrl.login(username, password)
+    auth_ctrl.http_client.session.cookies.clear()
+    auth_ctrl, username, webhook_url = _setup_and_login()
 
-    response = buy_win720(globalAuthCtrl, username) 
+    response = buy_win720(auth_ctrl, username) 
+    send_message(1, 1, response=response, webhook_url=webhook_url)
+
+def lotto_buy():
+    load_dotenv(override=True)
+    count = int(os.environ.get('COUNT'))
+    auth_ctrl, _, discord_webhook_url = _setup_and_login()
+    mode = "AUTO"
+    
+    response = buy_lotto645(auth_ctrl, count, mode)
+    send_message(1, 0, response=response, webhook_url=discord_webhook_url)
+
+def win720_buy():
+    auth_ctrl, username, discord_webhook_url = _setup_and_login()
+
+    response = buy_win720(auth_ctrl, username)
     send_message(1, 1, response=response, webhook_url=discord_webhook_url)
+
+def lotto_check():
+    auth_ctrl, _, discord_webhook_url = _setup_and_login()
+
+    response = check_winning_lotto645(auth_ctrl)
+    send_message(0, 0, response=response, webhook_url=discord_webhook_url)
+
+def win720_check():
+    auth_ctrl, _, discord_webhook_url = _setup_and_login()
+
+    response = check_winning_win720(auth_ctrl)
+    send_message(0, 1, response=response, webhook_url=discord_webhook_url)
 
 def run():
     if len(sys.argv) < 2:
@@ -100,6 +139,14 @@ def run():
         buy()
     elif sys.argv[1] == "check":
         check()
+    elif sys.argv[1] == "buy_lotto":
+        lotto_buy()
+    elif sys.argv[1] == "buy_win720":
+        win720_buy()
+    elif sys.argv[1] == "check_lotto":
+        lotto_check()
+    elif sys.argv[1] == "check_win720":
+        win720_check()
   
 
 if __name__ == "__main__":
